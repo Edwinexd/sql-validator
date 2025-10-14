@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import { useRef, useState } from "react";
 import dbLayoutDark from "./db_layout_dark.svg";
 import dbLayoutLight from "./db_layout_light.svg";
 import dbLayoutLightPng from "./db_layout_light_bg.png";
