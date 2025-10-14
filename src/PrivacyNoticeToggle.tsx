@@ -1,10 +1,10 @@
 import { XMarkIcon } from "@heroicons/react/24/solid";
-import React, { useRef } from "react";
+import { useRef } from "react";
 
 const PrivacyNoticeToggle = () => {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
-  if (process.env.REACT_APP_PRIVACY_CF_WEB_ANALYTICS !== "true") {
+  if (import.meta.env.VITE_PRIVACY_CF_WEB_ANALYTICS !== "true") {
     return null;
   }
 
@@ -30,10 +30,10 @@ const PrivacyNoticeToggle = () => {
             Cloudflare&apos;s privacy-first web analytics
           </a>{" "}
           for general usage statistics without tracking individual users.{" "}
-          {process.env.REACT_APP_PRIVACY_COMPANY_NAME} ({process.env.REACT_APP_PRIVACY_COMPANY_PARENTHESES_VALUE}) is the
+          {import.meta.env.VITE_PRIVACY_COMPANY_NAME} ({import.meta.env.VITE_PRIVACY_COMPANY_PARENTHESES_VALUE}) is the
           responsible data provider for this deployment of the app. For inquiries, contact{" "}
-          <a href={`mailto:${process.env.REACT_APP_PRIVACY_EMAIL}`} className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">
-            {process.env.REACT_APP_PRIVACY_EMAIL}
+          <a href={`mailto:${import.meta.env.VITE_PRIVACY_EMAIL}`} className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">
+            {import.meta.env.VITE_PRIVACY_EMAIL}
           </a>.
         </p>
         <div className="text-right">

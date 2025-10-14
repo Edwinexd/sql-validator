@@ -15,7 +15,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Editor from "react-simple-code-editor";
 import "./App.css";
 import ResultTable from "./ResultTable";
@@ -290,7 +290,7 @@ function App() {
   }, [result, question, query, evaluatedQuery, exportingStatus]);
 
   // Save query based on question
-  const loadQuery = useCallback((oldQuestion: Question | undefined, newQuestion: Question) => {
+  const loadQuery = useCallback((_oldQuestion: Question | undefined, newQuestion: Question) => {
     setQuery(localStorage.getItem("questionId-" + newQuestion.id) || DEFAULT_QUERY);
     // This prevents user from ctrl-z'ing to a different question
     if (editorRef.current) {

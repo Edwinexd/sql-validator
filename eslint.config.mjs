@@ -30,7 +30,13 @@ export default [
   {
     rules: {
       "no-unused-vars": "off",
-      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-unused-vars": [
+        "warn", 
+        { 
+          argsIgnorePattern: "^_",
+        }
+      ],
+      "react/react-in-jsx-scope": "off",
       "quotes": ["error", "double", { avoidEscape: true }],
       "@stylistic/indent": ["error", 2],
       "@stylistic/jsx-quotes": ["error"],
