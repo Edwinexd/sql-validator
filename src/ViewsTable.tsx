@@ -23,7 +23,7 @@ const ViewsTable: React.FC<ViewsTableProps> = ({ views, currentlyQuriedView, onR
       <h2 className="text-2xl font-semibold mb-3.5">Views</h2>
       <div className="w-full overflow-x-auto">
         <table className="w-full text-left text-lg border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
-          <thead className="bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-slate-100">
+          <thead className="bg-[#d7dde7] dark:bg-slate-800 text-slate-900 dark:text-slate-100">
             <tr>
               <th className="border-b dark:border-slate-700 px-4 py-2">Name</th>
               <th className="border-b dark:border-slate-700 px-4 py-2">Query and Result</th>
@@ -37,22 +37,22 @@ const ViewsTable: React.FC<ViewsTableProps> = ({ views, currentlyQuriedView, onR
                 <td className="border-b dark:border-slate-800 px-4 py-2"><WordBreakText text={view.name} /></td>
                 <td className="border-b dark:border-slate-800 px-4 py-2">
                   {currentlyQuriedView === view.name ? (
-                    <button className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 text-slate-800 dark:text-slate-100 text-base font-semibold py-2 px-4 my-2 w-full max-w-40 rounded-lg shadow-sm" onClick={() => {onViewHideRequest();}}>
+                    <button className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 text-slate-800 dark:text-slate-100 text-base font-semibold py-2 px-4 my-2 w-full max-w-40 rounded-md shadow-sm" onClick={() => {onViewHideRequest();}}>
                       Hide
                     </button>
                   ) : (
-                    <button className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 text-slate-800 dark:text-slate-100 text-base font-semibold py-2 px-4 my-2 w-full max-w-40 rounded-lg shadow-sm" onClick={() => {
+                    <button className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 text-slate-800 dark:text-slate-100 text-base font-semibold py-2 px-4 my-2 w-full max-w-40 rounded-md shadow-sm" onClick={() => {
                       onViewRequest(view.name);
                     }}>Display</button>
                   )}
                 </td>
                 <td className="border-b dark:border-slate-800 px-4 py-2">
-                  <button className="bg-green-600 hover:bg-green-700 text-white text-base font-semibold py-2 px-4 my-2 w-full max-w-40 rounded-lg shadow-sm" onClick={() => {
+                  <button className="bg-[#36a36b] hover:bg-[#2e895a] text-white text-base font-semibold py-2 px-4 my-2 w-full max-w-40 rounded-md shadow-sm" onClick={() => {
                     onViewExportRequest(view.name);
                   }}>Export</button>
                 </td>
                 <td className="border-b dark:border-slate-800 px-4 py-2">
-                  <button className="bg-red-600 hover:bg-red-700 text-white text-base font-semibold py-2 px-4 my-2 w-full max-w-40 rounded-lg shadow-sm" onClick={() => {
+                  <button className="bg-red-600 hover:bg-red-700 text-white text-base font-semibold py-2 px-4 my-2 w-full max-w-40 rounded-md shadow-sm" onClick={() => {
                     onRemoveView(view.name);
                   }}>Delete</button>
                 </td>

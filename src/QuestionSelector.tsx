@@ -204,7 +204,7 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQu
   const options = questions.map(q => { return { value: String(q.category_id), label: String(q.display_number) }; }).flat();
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-4 my-2 text-lg font-semibold w-full max-w-4xl">
+    <div className="flex flex-wrap items-center justify-center gap-6 my-1 text-lg font-semibold w-full max-w-4xl">
       <div className="flex items-center gap-2">
         <span className="text-slate-700 dark:text-slate-200">Question</span>
         <Select options={questions.map(q => { return { value: String(q.category_id), label: String(q.display_number) }; }).flat()}

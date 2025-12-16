@@ -49,19 +49,19 @@ const ResultTable: React.FC<ResultTableProps> = ({ result, forceLight, forceFixe
   }
   return (
     <>
-      <table className={`table-auto ${maybeFixedSizes("text-sm")} ${maybeRemoveDark("dark:bg-slate-700")} bg-slate-300`}>
+      <table className={`table-auto ${maybeFixedSizes("text-sm")} ${maybeRemoveDark("dark:bg-slate-800")} bg-white border border-slate-200 dark:border-slate-700`}>
         <thead>
-          <tr>
+          <tr className="bg-[#d7dde7] dark:bg-slate-700">
             {columns.map((col, i) => (
-              <th key={col + "-" + i} className={`border ${maybeRemoveDark("dark:border-slate-600 dark:bg-slate-600")} ${maybeFixedSizes("px-4 py-2")} bg-slate-200`}>{col}</th>
+              <th key={col + "-" + i} className={`border ${maybeRemoveDark("dark:border-slate-700")} ${maybeFixedSizes("px-4 py-2")}`}>{col}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {data.map((row, i) => (
-            <tr key={i}>
+            <tr key={i} className="odd:bg-white even:bg-slate-50 dark:odd:bg-slate-900 dark:even:bg-slate-800">
               {row.map((cell, j) => (
-                <td key={i + "-" + j} className={`border ${maybeRemoveDark("dark:border-slate-600")} ${maybeFixedSizes("px-4 py-2")} ${maybeFixedSizes("whitespace-normal")}`}>
+                <td key={i + "-" + j} className={`border ${maybeRemoveDark("dark:border-slate-700")} ${maybeFixedSizes("px-4 py-2")} ${maybeFixedSizes("whitespace-normal")}`}>
                   {cell !== null ? <span>{cell}</span> : <span className="italic" title="NULL: No value">NULL</span>}
                 </td>
               ))}

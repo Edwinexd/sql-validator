@@ -681,9 +681,9 @@ function App() {
 
   const questionLabel = question ? `Fråga ${question.category.display_number}${question.display_sequence}` : "Select a question to get started!";
   const questionDescription = question?.description || "Select a question to get started!";
-  const outlineButtonClasses = "inline-flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 font-semibold py-2 px-4 rounded-lg shadow-sm transition-colors";
-  const primaryButtonClasses = "bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-base font-semibold py-2 px-4 rounded-lg shadow-sm transition-colors";
-  const accentButtonClasses = "inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition-colors";
+  const outlineButtonClasses = "inline-flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 font-semibold py-2 px-4 rounded-md shadow-[0_1px_0_rgba(0,0,0,0.05)] transition-colors";
+  const primaryButtonClasses = "inline-flex items-center gap-2 bg-[#2d3f8f] hover:bg-[#243373] disabled:bg-slate-300 text-white text-base font-semibold py-2 px-5 rounded-md shadow-[0_1px_0_rgba(0,0,0,0.08)] transition-colors";
+  const accentButtonClasses = "inline-flex items-center gap-2 bg-[#36a36b] hover:bg-[#2e895a] disabled:bg-green-200 text-white font-semibold py-2 px-4 rounded-md shadow-[0_1px_0_rgba(0,0,0,0.08)] transition-colors";
   const selectedView = queryedView ? views.find(view => view.name === queryedView) : undefined;
   const statusContent = !isViewResult && result ? (
     isCorrect ? (
@@ -709,8 +709,8 @@ function App() {
       {exportQuestion && exportQuery && <ExportRenderer query={{isCorrect: isCorrectResult(exportQuestion.evaluable_result, evalSql(exportQuery)), question: exportQuestion, code: exportQuery, result: evalSql(exportQuery)}} ref={exportRendererRef} />}
       {exportView && <ExportRenderer view={{view: exportView, result: evalSql(`SELECT * FROM ${exportView.name}`)}} ref={exportRendererRef} />}
       <header className="App-header">
-        <div className="w-full max-w-6xl mx-auto px-4 md:px-6 lg:px-8 py-6 flex flex-col items-center gap-6">
-          <div className="w-full flex justify-end">
+        <div className="w-full max-w-6xl mx-auto px-4 md:px-6 lg:px-8 py-8 flex flex-col items-center gap-6">
+          <div className="w-full flex justify-center">
             <ThemeToggle setTheme={setTheme} isDarkMode={isDarkMode}></ThemeToggle>
           </div>
           <h1 className="text-5xl md:text-6xl font-semibold text-center">SQL Validator</h1>
@@ -719,7 +719,7 @@ function App() {
           </div>
           <QuestionSelector writtenQuestions={writtenQuestions} correctQuestions={correctQuestions} onSelect={(selectedQuestion) => {loadQuery(question, selectedQuestion); resetResult(); setQuestion(selectedQuestion);}}></QuestionSelector>
 
-          <div className="w-full max-w-4xl bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 flex flex-col gap-5">
+          <div className="w-full max-w-4xl bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 p-7 flex flex-col gap-5">
             <div className="text-left space-y-1">
               <p className="text-sm uppercase tracking-wide text-slate-500 dark:text-slate-400">Question</p>
               <h2 className="text-3xl font-semibold">{questionLabel}</h2>
@@ -727,7 +727,7 @@ function App() {
             </div>
 
             <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm">
-              <div className="bg-slate-200 dark:bg-slate-800 text-left px-4 py-2 font-semibold text-slate-800 dark:text-slate-100">
+              <div className="bg-[#c2cad7] dark:bg-slate-800 text-left px-4 py-2 font-semibold text-slate-900 dark:text-slate-100">
                 Query
               </div>
               <div className="bg-blue-50 dark:bg-slate-900">
