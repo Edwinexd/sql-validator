@@ -730,7 +730,7 @@ function App() {
               <div className="bg-slate-200 dark:bg-slate-800 text-left px-4 py-2 font-semibold text-slate-800 dark:text-slate-100">
                 Query
               </div>
-              <div className="bg-[#eaf3ff] dark:bg-slate-900">
+              <div className="bg-blue-50 dark:bg-slate-900">
                 {query === undefined ? 
                   <Editor
                     id="placeholder-editor"
@@ -769,7 +769,7 @@ function App() {
             }
 
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="min-h-[28px]">{statusContent}</div>
+              <div>{statusContent}</div>
               <div className="flex flex-wrap gap-3 justify-end">
                 <button onClick={() => {
                   if (!query) {
@@ -870,7 +870,7 @@ function App() {
                     highlight={code => highlight(code, languages.sql)}
                     padding={12}
                     tabSize={4}
-                    className="font-mono text-lg w-full bg-[#eaf3ff] dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl my-3"
+                    className="font-mono text-lg w-full bg-blue-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl my-3"
                   />
                   <p className="text-base text-slate-700 dark:text-slate-200 italic">... and this is the result of querying it with SELECT * FROM {queryedView};</p>
                   <div className="overflow-x-auto mt-2">
