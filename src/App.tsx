@@ -681,6 +681,9 @@ function App() {
 
   const questionLabel = question ? `Fråga ${question.category.display_number}${question.display_sequence}` : "Select a question to get started!";
   const questionDescription = question?.description || "Select a question to get started!";
+  const outlineButtonClasses = "inline-flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 font-semibold py-2 px-4 rounded-lg shadow-sm transition-colors";
+  const primaryButtonClasses = "bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-base font-semibold py-2 px-4 rounded-lg shadow-sm transition-colors";
+  const accentButtonClasses = "inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition-colors";
   const statusContent = !isViewResult && result ? (
     isCorrect ? (
       <div className="flex items-center gap-2 text-green-600 dark:text-green-400 font-semibold">
@@ -778,20 +781,20 @@ function App() {
                     keywordCase: "upper",
                     dataTypeCase: "upper",
                     functionCase: "upper",
-                  }));}} disabled={!(error === null) || query === undefined} className="bg-white border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 disabled:opacity-50 text-base font-semibold py-2 px-4 rounded-lg shadow-sm transition-colors" type="submit">
+                  }));}} disabled={!(error === null) || query === undefined} className={`${outlineButtonClasses} disabled:opacity-50`} type="submit">
                   Format Code
                 </button>
-                <button onClick={runQuery} disabled={!(error === null) || query === undefined} className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:opacity-60 text-white text-base font-semibold py-2 px-4 rounded-lg shadow-sm transition-colors" type="submit">Run Query</button>
+                <button onClick={runQuery} disabled={!(error === null) || query === undefined} className={primaryButtonClasses} type="submit">Run Query</button>
               </div>
             </div>
 
             <div className="border-t border-slate-200 dark:border-slate-800 pt-4 flex flex-wrap gap-3">
-              <button onClick={() => exportModalRef.current?.openDialog()} className="inline-flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 font-semibold py-2 px-4 rounded-lg shadow-sm" type="submit">
+              <button onClick={() => exportModalRef.current?.openDialog()} className={outlineButtonClasses} type="submit">
                 <ArrowDownTrayIcon className="h-5 w-5" />
                 <span>Export Data</span>
               </button>
               <ExportSelectorModal correctQuestions={correctQuestions} onExport={(include) => exportData({include})} ref={exportModalRef} />
-              <button onClick={importData} className="inline-flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 font-semibold py-2 px-4 rounded-lg shadow-sm" type="submit">
+              <button onClick={importData} className={outlineButtonClasses} type="submit">
                 <ArrowUpTrayIcon className="h-5 w-5" />
                 <span>Import Data</span>
               </button>
@@ -802,12 +805,12 @@ function App() {
                   }
                   setDisplayViewsTable(!showViewsTable);
                 }} 
-                className="inline-flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 font-semibold py-2 px-4 rounded-lg shadow-sm"
+                className={outlineButtonClasses}
               >
                 {showViewsTable ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
                 <span>{showViewsTable ? "Hide Views" : "Show Views"}</span>
               </button>
-              <button onClick={exportImageQuery} className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 disabled:opacity-60 text-white font-semibold py-2 px-4 rounded-lg shadow-sm" type="submit" disabled={!loadedQuestionCorrect}>
+              <button onClick={exportImageQuery} className={accentButtonClasses} type="submit" disabled={!loadedQuestionCorrect}>
                 <PhotoIcon className="h-5 w-5" />
                 <span>Export PNG</span>
               </button>
