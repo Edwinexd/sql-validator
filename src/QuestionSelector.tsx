@@ -204,9 +204,10 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQu
   const options = questions.map(q => { return { value: String(q.category_id), label: String(q.display_number) }; }).flat();
 
   return (
-    <div className="flex flex-wrap my-3 text-xl font-semibold w-full max-w-4xl justify-center">
-      <div className="flex">
-        Question: <Select options={questions.map(q => { return { value: String(q.category_id), label: String(q.display_number) }; }).flat()}
+    <div className="flex flex-wrap items-center justify-center gap-4 my-2 text-lg font-semibold w-full max-w-4xl">
+      <div className="flex items-center gap-2">
+        <span className="text-slate-700 dark:text-slate-200">Question</span>
+        <Select options={questions.map(q => { return { value: String(q.category_id), label: String(q.display_number) }; }).flat()}
           value={options.find(o => o.value === String(category))}
           onChange={(e) => {
             if (!e) {
@@ -215,7 +216,7 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQu
             setCategory(Number(e.value));
             setSequence(getInitialSequence(Number(e.value)));
           }} 
-          className="text-black mr-3.5 ml-2"
+          className="text-black min-w-[110px]"
           components={{
             Option: (props) => (
               <HighlightedOption
@@ -243,13 +244,14 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQu
         
         />
       </div>
-      <div className="flex">
-        Variant: <Select options={sequenceOptions} value={sequenceOptions.find(o => o.value === sequence)} onChange={(e) => {
+      <div className="flex items-center gap-2">
+        <span className="text-slate-700 dark:text-slate-200">Variant</span>
+        <Select options={sequenceOptions} value={sequenceOptions.find(o => o.value === sequence)} onChange={(e) => {
           if (!e) {
             return;
           }
           setSequence(e.value);
-        }} className="text-black ml-2"
+        }} className="text-black min-w-[90px]"
         components={{
           Option: (props) => (
             <HighlightedOption

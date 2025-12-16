@@ -20,39 +20,39 @@ interface ViewsTableProps {
 const ViewsTable: React.FC<ViewsTableProps> = ({ views, currentlyQuriedView, onRemoveView, onViewRequest, onViewHideRequest, onViewExportRequest }) => {
   return (
     <>
-      <h2 className="text-3xl font-semibold mb-3.5">Views</h2>
-      <div className="w-full max-w-2xl overflow-x-auto">
-        <table className="table-auto text-xl dark:bg-slate-700 bg-slate-300 m-auto">
-          <thead>
+      <h2 className="text-2xl font-semibold mb-3.5">Views</h2>
+      <div className="w-full overflow-x-auto">
+        <table className="w-full text-left text-lg border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+          <thead className="bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-slate-100">
             <tr>
-              <th className="border dark:border-slate-600 px-4 py-2 dark:bg-slate-600 bg-slate-200">Name</th>
-              <th className="border dark:border-slate-600 px-4 py-2 dark:bg-slate-600 bg-slate-200">Query and Result</th>
-              <th className="border dark:border-slate-600 px-4 py-2 dark:bg-slate-600 bg-slate-200">Export PNG</th>
-              <th className="border dark:border-slate-600 px-4 py-2 dark:bg-slate-600 bg-slate-200">Delete</th>
+              <th className="border-b dark:border-slate-700 px-4 py-2">Name</th>
+              <th className="border-b dark:border-slate-700 px-4 py-2">Query and Result</th>
+              <th className="border-b dark:border-slate-700 px-4 py-2">Export PNG</th>
+              <th className="border-b dark:border-slate-700 px-4 py-2">Delete</th>
             </tr>
           </thead>
           <tbody>
             {views.map((view) => (
-              <tr key={view.name}>
-                <td className="border dark:border-slate-600 px-4 py-2"><WordBreakText text={view.name} /></td>
-                <td className="border dark:border-slate-600 px-4 py-2">
+              <tr key={view.name} className="odd:bg-white even:bg-slate-50 dark:odd:bg-slate-900 dark:even:bg-slate-800">
+                <td className="border-b dark:border-slate-800 px-4 py-2"><WordBreakText text={view.name} /></td>
+                <td className="border-b dark:border-slate-800 px-4 py-2">
                   {currentlyQuriedView === view.name ? (
-                    <button className="bg-blue-500 hover:bg-blue-700 disabled:bg-blue-300 text-white text-xl font-semibold py-2 px-4 my-4 w-full max-w-40 rounded" onClick={() => {onViewHideRequest();}}>
+                    <button className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 text-slate-800 dark:text-slate-100 text-base font-semibold py-2 px-4 my-2 w-full max-w-40 rounded-lg shadow-sm" onClick={() => {onViewHideRequest();}}>
                       Hide
                     </button>
                   ) : (
-                    <button className="bg-blue-500 hover:bg-blue-700 text-white text-xl font-semibold py-2 px-4 my-4 w-full max-w-40 rounded" onClick={() => {
+                    <button className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 text-slate-800 dark:text-slate-100 text-base font-semibold py-2 px-4 my-2 w-full max-w-40 rounded-lg shadow-sm" onClick={() => {
                       onViewRequest(view.name);
                     }}>Display</button>
                   )}
                 </td>
-                <td className="border dark:border-slate-600 px-4 py-2">
-                  <button className="bg-green-500 hover:bg-green-700 text-white text-xl font-semibold py-2 px-4 my-4 w-full max-w-40 rounded" onClick={() => {
+                <td className="border-b dark:border-slate-800 px-4 py-2">
+                  <button className="bg-green-600 hover:bg-green-700 text-white text-base font-semibold py-2 px-4 my-2 w-full max-w-40 rounded-lg shadow-sm" onClick={() => {
                     onViewExportRequest(view.name);
                   }}>Export</button>
                 </td>
-                <td className="border dark:border-slate-600 px-4 py</td>-2">
-                  <button className="bg-red-500 hover:bg-red-700 text-white text-xl font-semibold py-2 px-4 my-4 w-full max-w-40 rounded" onClick={() => {
+                <td className="border-b dark:border-slate-800 px-4 py-2">
+                  <button className="bg-red-600 hover:bg-red-700 text-white text-base font-semibold py-2 px-4 my-2 w-full max-w-40 rounded-lg shadow-sm" onClick={() => {
                     onRemoveView(view.name);
                   }}>Delete</button>
                 </td>

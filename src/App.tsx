@@ -31,7 +31,7 @@ import { format } from "sql-formatter";
 import initSqlJs from "sql.js";
 import ViewsTable, { View } from "./ViewsTable";
 
-import { InformationCircleIcon } from "@heroicons/react/24/solid";
+import { ArrowDownTrayIcon, ArrowUpTrayIcon, CheckCircleIcon, EyeIcon, EyeSlashIcon, InformationCircleIcon, PhotoIcon, XCircleIcon } from "@heroicons/react/24/solid";
 import sha256 from "crypto-js/sha256";
 import { format as formatFns } from "date-fns";
 import { toPng } from "html-to-image";
@@ -679,182 +679,212 @@ function App() {
     });
   }, [evaluatedQuery, exportQuery, exportRendererRef, getTheme, isDarkMode, exportingStatus, question, resetResult, setTheme, exportQuestion, exportView]);
 
+  const questionLabel = question ? `Fråga ${question.category.display_number}${question.display_sequence}` : "Select a question to get started!";
+  const questionDescription = question?.description || "Select a question to get started!";
+  const statusContent = !isViewResult && result ? (
+    isCorrect ? (
+      <div className="flex items-center gap-2 text-green-600 dark:text-green-400 font-semibold">
+        <CheckCircleIcon className="h-6 w-6" />
+        <span>Matching result!</span>
+      </div>
+    ) : isCorrect === undefined ? (
+      <div className="flex items-center gap-2 text-blue-600 dark:text-blue-300 font-semibold">
+        <InformationCircleIcon className="h-6 w-6" />
+        <span>Result evaluated</span>
+      </div>
+    ) : (
+      <div className="flex items-center gap-2 text-red-600 dark:text-red-400 font-semibold">
+        <XCircleIcon className="h-6 w-6" />
+        <span>Wrong result!</span>
+      </div>
+    )
+  ) : null;
+
   return (
-    <div className="App">
+    <div className="App min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       {exportQuestion && exportQuery && <ExportRenderer query={{isCorrect: isCorrectResult(exportQuestion.evaluable_result, evalSql(exportQuery)), question: exportQuestion, code: exportQuery, result: evalSql(exportQuery)}} ref={exportRendererRef} />}
       {exportView && <ExportRenderer view={{view: exportView, result: evalSql(`SELECT * FROM ${exportView.name}`)}} ref={exportRendererRef} />}
       <header className="App-header">
-        <div className="my-2"></div>
-        <ThemeToggle setTheme={setTheme} isDarkMode={isDarkMode}></ThemeToggle>
-        <h1 className="text-6xl font-semibold my-3">SQL Validator</h1>
-        <DatabaseLayoutDialog isDarkMode={isDarkMode} />
-        <QuestionSelector writtenQuestions={writtenQuestions} correctQuestions={correctQuestions} onSelect={(selectedQuestion) => {loadQuery(question, selectedQuestion); resetResult(); setQuestion(selectedQuestion);}}></QuestionSelector>
-        <p className="break-words max-w-4xl mb-4 font-semibold text-left text-xl p-2">{question?.description || "Select a question to get started!"}</p>
-        {query === undefined ? 
-          <Editor
-            id="placeholder-editor"
-            itemID="placeholder-editor"
-            value={"-- Select a question to get started!"}
-            disabled={true}
-            onValueChange={_code => null}
-            highlight={code => highlight(code, languages.sql)}
-            padding={10}
-            tabSize={2}
-            className="font-mono text-xl w-full max-w-4xl dark:bg-slate-800 bg-slate-200 min-h-40"
-            ref={editorRef}
-          />
-          : 
-          <Editor
-            id="editor"
-            itemID="editor"
-            value={query}
-            onValueChange={code => setQuery(code)}
-            highlight={code => highlight(code, languages.sql)}
-            padding={10}
-            tabSize={2}
-            className="font-mono text-xl w-full max-w-4xl dark:bg-slate-800 bg-slate-200 border-2 min-h-40 border-black dark:border-white"
-            ref={editorRef}
-          />
-        }
-        {error && <p className="font-mono text-red-500 max-w-4xl break-all">{error}</p>}
-        {correctQueryMismatch &&
-            <p className="font-mono text-yellow-500 max-w-4xl break-all">Query Mismatch! 
-              <span
-                className="text-yellow-500"
-                title="The current SQL query does not match the one that will be exported. The current version has either not been evaluated or gives an incorrect result. Please run the new query to register it as correct or use load saved to run the currently marked correct query."
-              >
-                <InformationCircleIcon className="h-5 w-5 inline-block ml-1" />
-              </span>
-            </p>
-        }
-        <div className="flex flex-wrap justify-center text-base max-w-xl">
-          <button onClick={runQuery} disabled={!(error === null) || query === undefined} className="bg-blue-500 hover:bg-blue-700 disabled:bg-blue-300 disabled:opacity-50 text-white text-xl font-semibold py-2 px-4 mt-3.5 rounded mr-3 w-40" type="submit">Run Query</button>
-          <button onClick={() => {
-            if (!query) {
-              return;
-            }
-            setQuery(format(query, {
-              language: "sqlite",
-              tabWidth: 2,
-              useTabs: false,
-              keywordCase: "upper",
-              dataTypeCase: "upper",
-              functionCase: "upper",
-            }));}} disabled={!(error === null) || query === undefined} className="bg-blue-500 hover:bg-blue-700 disabled:bg-blue-300 disabled:opacity-50 text-white text-xl font-semibold py-2 px-4 mt-3.5 rounded mr-3 w-40" type="submit">
-            Format Code
-          </button>
-          <button onClick={() => {
-            if (!question) {
-              return;
-            }
-            setQuery(localStorage.getItem(`correctQuestionId-${question.id}`) || DEFAULT_QUERY);
-          }} 
-          disabled={!correctQueryMismatch || !question}
-          className="bg-yellow-500 hover:bg-yellow-700 disabled:bg-yellow-400 disabled:opacity-50 text-white text-xl font-semibold py-2 px-4 mt-3.5 rounded mr-3 w-40" type="submit">
-            Load Saved
-          </button>
-          {/* Might be removed fully, servers no purpose as it is right now */}
-          {/*
-          <button onClick={() => {
-            if (window.confirm('Are you sure you want to reset the database?\n\nNote: This will not reset your written answers.')) {
-              initDb();
-            }
-            }} className='bg-red-500 hover:bg-red-700 text-white text-xl font-semibold py-2 px-4 mt-4 rounded mr-3 w-40' type='submit'>Reset DB</button>
-          */}
-          <button onClick={exportImageQuery} className="bg-green-500 hover:bg-green-700 disabled:bg-green-400 disabled:opacity-50 text-white text-xl font-semibold py-2 px-4 mt-4 rounded mr-3 w-40" type="submit" disabled={!loadedQuestionCorrect}>Export PNG</button>
-          <button onClick={() => exportModalRef.current?.openDialog()} className="bg-blue-500 hover:bg-blue-700 text-white text-xl font-semibold py-2 px-4 mt-4 rounded mr-3 w-40" type="submit">Export Data</button>
-          <ExportSelectorModal correctQuestions={correctQuestions} onExport={(include) => exportData({include})} ref={exportModalRef} />
-          <button onClick={importData} className="bg-blue-500 hover:bg-blue-700 text-white text-xl font-semibold py-2 px-4 mt-4 rounded mr-3 w-40" type="submit">Import Data</button>
-        </div>
-
-        <button 
-          onClick={() => {
-            if (showViewsTable && queryedView) {
-              resetResult();
-            }
-            setDisplayViewsTable(!showViewsTable);
-          }} 
-          className="bg-blue-500 hover:bg-blue-700 text-white text-xl font-semibold py-2 px-4 my-4 rounded mr-3 w-40"
-        >
-          {showViewsTable ? "Hide Views" : "Show Views"}
-        </button>
-        {showViewsTable && (
-          <>
-            <ViewsTable 
-              views={views} 
-              onRemoveView={(name) => deleteView(name)} 
-              onViewRequest={(name) => getViewResult(name)} 
-              currentlyQuriedView={queryedView}
-              onViewHideRequest={() => resetResult()}
-              onViewExportRequest={(name) => exportImageView(name)}
-            />
-            <div className="my-4"></div>
-          </>
-        )}
-        
-
-        {result && <>
-          {!isViewResult ? question && <>
-            {/* if correct result else display wrong result */}
-            {isCorrect ? <>
-              <h2 className="text-3xl font-semibold text-green-500">Matching Result!</h2>
-              <p className="break-words max-w-4xl mb-4 font-semibold text-left text-xl p-2 italic">... but it may not be correct! Make sure that all joins are complete and that the query only uses information from the assignment before exporting.</p>
-            </> : isCorrect === undefined ? 
-              <h2 className="text-3xl font-semibold text-blue-500">No result yet!</h2>
-              :
-              <h2 className="text-3xl font-semibold text-red-500">Wrong result!</h2>
-            }
-            {/* Two different result tables next to each other, actual and expected */}
-            <div className="flex max-w-full py-4 justify-center">
-              <div className="flex-initial px-2 overflow-x-auto">
-                <h2 className="text-3xl font-semibold py-2">Actual</h2>
-                <div className="overflow-x-auto max-w-full">
-                  <ResultTable result={result} />
-                </div>
-              </div>
-              <div className="flex-initial px-2 overflow-x-auto">
-                <h2 className="text-3xl font-semibold py-2">Expected</h2>
-                <div className="overflow-x-auto max-w-full">
-                  <ResultTable result={question.evaluable_result} />
-                </div>
-              </div>
-            </div>
-          </> : <>
-            <h2 className="text-3xl font-semibold">View {queryedView}</h2>
-            {/* code for the view */}
-            {/* <h2 className="text-3xl font-semibold">Query for {queryedView}</h2> */}
-            <p className="break-words max-w-4xl mb-4 font-semibold text-left text-xl p-2 italic">This is the query for view {queryedView}.</p>
-            <Editor
-              readOnly={true}
-              value={format(
-                views.find(view => view.name === queryedView) ? views.find(view => view.name === queryedView)!.query : "-- View Deleted", {
-                  language: "sqlite",
-                  tabWidth: 2,
-                  useTabs: false,
-                  keywordCase: "upper",
-                  dataTypeCase: "upper",
-                  functionCase: "upper",
-                })}
-              onValueChange={() => null}
-              highlight={code => highlight(code, languages.sql)}
-              padding={10}
-              tabSize={4}
-              className="font-mono text-xl w-full dark:bg-slate-800 bg-slate-200 border-2 max-w-4xl min-h-40 border-none my-2"
-            />
-            {/* <h2 className="text-3xl font-semibold">Result of {queryedView}</h2> */}
-            <p className="break-words max-w-4xl mb-4 font-semibold text-left text-xl p-2 italic">... and this is the result of querying it with SELECT * FROM {queryedView};</p>
-            <div className="overflow-x-auto max-w-full">
-              <ResultTable result={result} />
-            </div>
-          </>}
-        </>}
-        <footer className="text-lg py-4 my-3">
-          <div className="flex flex-wrap mx-2 justify-center items-center gap-x-8 gap-y-4">
-            <p>Copyright &copy; <a href="https://github.com/Edwinexd" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">Edwin Sundberg</a> {new Date().getFullYear()} - <a href="https://github.com/Edwinexd/sql-validator?tab=GPL-3.0-1-ov-file" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">GPL-3.0</a></p>              
-            <p><a href="https://github.com/Edwinexd/sql-validator/issues" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">Report issues</a></p>
-            <PrivacyNoticeToggle></PrivacyNoticeToggle>
+        <div className="w-full max-w-6xl mx-auto px-4 md:px-6 lg:px-8 py-6 flex flex-col items-center gap-6">
+          <div className="w-full flex justify-end">
+            <ThemeToggle setTheme={setTheme} isDarkMode={isDarkMode}></ThemeToggle>
           </div>
-        </footer>
+          <h1 className="text-5xl md:text-6xl font-semibold text-center">SQL Validator</h1>
+          <div className="w-full max-w-4xl rounded-3xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <DatabaseLayoutDialog isDarkMode={isDarkMode} />
+          </div>
+          <QuestionSelector writtenQuestions={writtenQuestions} correctQuestions={correctQuestions} onSelect={(selectedQuestion) => {loadQuery(question, selectedQuestion); resetResult(); setQuestion(selectedQuestion);}}></QuestionSelector>
+
+          <div className="w-full max-w-4xl bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 flex flex-col gap-5">
+            <div className="text-left space-y-1">
+              <p className="text-sm uppercase tracking-wide text-slate-500 dark:text-slate-400">Question</p>
+              <h2 className="text-3xl font-semibold">{questionLabel}</h2>
+              <p className="text-base text-slate-700 dark:text-slate-200 leading-relaxed">{questionDescription}</p>
+            </div>
+
+            <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm">
+              <div className="bg-slate-200 dark:bg-slate-800 text-left px-4 py-2 font-semibold text-slate-800 dark:text-slate-100">
+                Query
+              </div>
+              <div className="bg-[#eaf3ff] dark:bg-slate-900">
+                {query === undefined ? 
+                  <Editor
+                    id="placeholder-editor"
+                    itemID="placeholder-editor"
+                    value={"-- Select a question to get started!"}
+                    disabled={true}
+                    onValueChange={_code => null}
+                    highlight={code => highlight(code, languages.sql)}
+                    padding={12}
+                    tabSize={2}
+                    className="font-mono text-lg w-full bg-transparent min-h-[12rem] focus:outline-none"
+                    ref={editorRef}
+                  />
+                  : 
+                  <Editor
+                    id="editor"
+                    itemID="editor"
+                    value={query}
+                    onValueChange={code => setQuery(code)}
+                    highlight={code => highlight(code, languages.sql)}
+                    padding={12}
+                    tabSize={2}
+                    className="font-mono text-lg w-full bg-transparent min-h-[12rem] focus:outline-none"
+                    ref={editorRef}
+                  />
+                }
+              </div>
+            </div>
+
+            {error && <p className="font-mono text-red-600 dark:text-red-400 text-sm break-all">{error}</p>}
+            {correctQueryMismatch &&
+              <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 text-sm font-medium">
+                <InformationCircleIcon className="h-5 w-5" />
+                <span>Current SQL differs from the saved correct version. Run the query to register it as correct.</span>
+              </div>
+            }
+
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="min-h-[28px]">{statusContent}</div>
+              <div className="flex flex-wrap gap-3 justify-end">
+                <button onClick={() => {
+                  if (!query) {
+                    return;
+                  }
+                  setQuery(format(query, {
+                    language: "sqlite",
+                    tabWidth: 2,
+                    useTabs: false,
+                    keywordCase: "upper",
+                    dataTypeCase: "upper",
+                    functionCase: "upper",
+                  }));}} disabled={!(error === null) || query === undefined} className="bg-white border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 disabled:opacity-50 text-base font-semibold py-2 px-4 rounded-lg shadow-sm transition-colors" type="submit">
+                  Format Code
+                </button>
+                <button onClick={runQuery} disabled={!(error === null) || query === undefined} className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:opacity-60 text-white text-base font-semibold py-2 px-4 rounded-lg shadow-sm transition-colors" type="submit">Run Query</button>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200 dark:border-slate-800 pt-4 flex flex-wrap gap-3">
+              <button onClick={() => exportModalRef.current?.openDialog()} className="inline-flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 font-semibold py-2 px-4 rounded-lg shadow-sm" type="submit">
+                <ArrowDownTrayIcon className="h-5 w-5" />
+                <span>Export Data</span>
+              </button>
+              <ExportSelectorModal correctQuestions={correctQuestions} onExport={(include) => exportData({include})} ref={exportModalRef} />
+              <button onClick={importData} className="inline-flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 font-semibold py-2 px-4 rounded-lg shadow-sm" type="submit">
+                <ArrowUpTrayIcon className="h-5 w-5" />
+                <span>Import Data</span>
+              </button>
+              <button 
+                onClick={() => {
+                  if (showViewsTable && queryedView) {
+                    resetResult();
+                  }
+                  setDisplayViewsTable(!showViewsTable);
+                }} 
+                className="inline-flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 font-semibold py-2 px-4 rounded-lg shadow-sm"
+              >
+                {showViewsTable ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+                <span>{showViewsTable ? "Hide Views" : "Show Views"}</span>
+              </button>
+              <button onClick={exportImageQuery} className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 disabled:opacity-60 text-white font-semibold py-2 px-4 rounded-lg shadow-sm" type="submit" disabled={!loadedQuestionCorrect}>
+                <PhotoIcon className="h-5 w-5" />
+                <span>Export PNG</span>
+              </button>
+            </div>
+          </div>
+
+          {showViewsTable && (
+            <div className="w-full max-w-4xl bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 p-5">
+              <ViewsTable 
+                views={views} 
+                onRemoveView={(name) => deleteView(name)} 
+                onViewRequest={(name) => getViewResult(name)} 
+                currentlyQuriedView={queryedView}
+                onViewHideRequest={() => resetResult()}
+                onViewExportRequest={(name) => exportImageView(name)}
+              />
+            </div>
+          )}
+
+          {result && (
+            <section className="w-full max-w-5xl flex flex-col gap-6">
+              {!isViewResult ? question && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
+                      <h2 className="text-2xl font-semibold mb-3">Actual</h2>
+                      <div className="overflow-x-auto">
+                        <ResultTable result={result} forceFixedSizes />
+                      </div>
+                    </div>
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-4">
+                      <h2 className="text-2xl font-semibold mb-3">Expected</h2>
+                      <div className="overflow-x-auto">
+                        <ResultTable result={question.evaluable_result} forceFixedSizes />
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-sm text-slate-600 dark:text-slate-300 italic px-1">Make sure joins are complete and the query only uses information from the assignment before exporting.</p>
+                </>
+              ) : (
+                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+                  <h2 className="text-2xl font-semibold">View {queryedView}</h2>
+                  <p className="text-base text-slate-700 dark:text-slate-200 mt-1">This is the query for view {queryedView}.</p>
+                  <Editor
+                    readOnly={true}
+                    value={format(
+                      views.find(view => view.name === queryedView) ? views.find(view => view.name === queryedView)!.query : "-- View Deleted", {
+                        language: "sqlite",
+                        tabWidth: 2,
+                        useTabs: false,
+                        keywordCase: "upper",
+                        dataTypeCase: "upper",
+                        functionCase: "upper",
+                      })}
+                    onValueChange={() => null}
+                    highlight={code => highlight(code, languages.sql)}
+                    padding={12}
+                    tabSize={4}
+                    className="font-mono text-lg w-full bg-[#eaf3ff] dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl my-3"
+                  />
+                  <p className="text-base text-slate-700 dark:text-slate-200 italic">... and this is the result of querying it with SELECT * FROM {queryedView};</p>
+                  <div className="overflow-x-auto mt-2">
+                    <ResultTable result={result} forceFixedSizes />
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          <footer className="text-lg py-6 w-full text-center">
+            <div className="flex flex-wrap mx-2 justify-center items-center gap-x-8 gap-y-4">
+              <p>Copyright &copy; <a href="https://github.com/Edwinexd" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">Edwin Sundberg</a> {new Date().getFullYear()} - <a href="https://github.com/Edwinexd/sql-validator?tab=GPL-3.0-1-ov-file" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">GPL-3.0</a></p>              
+              <p><a href="https://github.com/Edwinexd/sql-validator/issues" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">Report issues</a></p>
+              <PrivacyNoticeToggle></PrivacyNoticeToggle>
+            </div>
+          </footer>
+        </div>
       </header>
     </div>
   );
