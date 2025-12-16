@@ -684,6 +684,7 @@ function App() {
   const outlineButtonClasses = "inline-flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-slate-400 dark:hover:border-slate-500 font-semibold py-2 px-4 rounded-lg shadow-sm transition-colors";
   const primaryButtonClasses = "bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-base font-semibold py-2 px-4 rounded-lg shadow-sm transition-colors";
   const accentButtonClasses = "inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition-colors";
+  const selectedView = queryedView ? views.find(view => view.name === queryedView) : undefined;
   const statusContent = !isViewResult && result ? (
     isCorrect ? (
       <div className="flex items-center gap-2 text-green-600 dark:text-green-400 font-semibold">
@@ -857,7 +858,7 @@ function App() {
                   <Editor
                     readOnly={true}
                     value={format(
-                      views.find(view => view.name === queryedView) ? views.find(view => view.name === queryedView)!.query : "-- View Deleted", {
+                      selectedView ? selectedView.query : "-- View Deleted", {
                         language: "sqlite",
                         tabWidth: 2,
                         useTabs: false,
