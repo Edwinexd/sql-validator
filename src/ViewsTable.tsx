@@ -1,7 +1,6 @@
 import "prismjs/components/prism-sql";
 import "prismjs/themes/prism.css";
 import React from "react";
-import WordBreakText from "./WordBreakText";
 
 export interface View {
   name: string;
@@ -19,50 +18,53 @@ interface ViewsTableProps {
 
 const ViewsTable: React.FC<ViewsTableProps> = ({ views, currentlyQuriedView, onRemoveView, onViewRequest, onViewHideRequest, onViewExportRequest }) => {
   return (
-    <>
-      <h2 className="text-3xl font-semibold mb-3.5">Views</h2>
-      <div className="w-full max-w-2xl overflow-x-auto">
-        <table className="table-auto text-xl dark:bg-slate-700 bg-slate-300 m-auto">
-          <thead>
-            <tr>
-              <th className="border dark:border-slate-600 px-4 py-2 dark:bg-slate-600 bg-slate-200">Name</th>
-              <th className="border dark:border-slate-600 px-4 py-2 dark:bg-slate-600 bg-slate-200">Query and Result</th>
-              <th className="border dark:border-slate-600 px-4 py-2 dark:bg-slate-600 bg-slate-200">Export PNG</th>
-              <th className="border dark:border-slate-600 px-4 py-2 dark:bg-slate-600 bg-slate-200">Delete</th>
-            </tr>
-          </thead>
-          <tbody>
-            {views.map((view) => (
-              <tr key={view.name}>
-                <td className="border dark:border-slate-600 px-4 py-2"><WordBreakText text={view.name} /></td>
-                <td className="border dark:border-slate-600 px-4 py-2">
-                  {currentlyQuriedView === view.name ? (
-                    <button className="bg-blue-500 hover:bg-blue-700 disabled:bg-blue-300 text-white text-xl font-semibold py-2 px-4 my-4 w-full max-w-40 rounded" onClick={() => {onViewHideRequest();}}>
-                      Hide
-                    </button>
-                  ) : (
-                    <button className="bg-blue-500 hover:bg-blue-700 text-white text-xl font-semibold py-2 px-4 my-4 w-full max-w-40 rounded" onClick={() => {
-                      onViewRequest(view.name);
-                    }}>Display</button>
-                  )}
-                </td>
-                <td className="border dark:border-slate-600 px-4 py-2">
-                  <button className="bg-green-500 hover:bg-green-700 text-white text-xl font-semibold py-2 px-4 my-4 w-full max-w-40 rounded" onClick={() => {
-                    onViewExportRequest(view.name);
-                  }}>Export</button>
-                </td>
-                <td className="border dark:border-slate-600 px-4 py</td>-2">
-                  <button className="bg-red-500 hover:bg-red-700 text-white text-xl font-semibold py-2 px-4 my-4 w-full max-w-40 rounded" onClick={() => {
-                    onRemoveView(view.name);
-                  }}>Delete</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
+    <div className="w-full">
+      {views.map((view) => (
+        <div
+          key={view.name}
+          className="flex items-center justify-between py-3 border-b border-gray-200 dark:border-slate-700 last:border-b-0"
+        >
+          <button
+            onClick={() => {
+              if (currentlyQuriedView === view.name) {
+                onViewHideRequest();
+              } else {
+                onViewRequest(view.name);
+              }
+            }}
+            className={`text-left font-medium hover:underline ${
+              currentlyQuriedView === view.name
+                ? "text-blue-700 dark:text-blue-300"
+                : "text-blue-600 dark:text-blue-400"
+            }`}
+          >
+            {view.name}
+          </button>
+          <div className="flex items-center gap-4 text-sm">
+            <button
+              onClick={() => onViewExportRequest(view.name)}
+              className="flex items-center gap-1 text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              Export PNG
+            </button>
+            <button
+              onClick={() => onRemoveView(view.name)}
+              className="flex items-center gap-1 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Delete
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 };
 
 export default ViewsTable;
+

@@ -24,6 +24,7 @@ interface QuestionSelectorProps {
   onSelect: (question: Question) => void;
   writtenQuestions?: number[];
   correctQuestions?: number[];
+  isDarkMode?: boolean;
 }
 
 interface HighlightProps {
@@ -39,6 +40,7 @@ interface HighlightBaseProps {
   correctQuestions?: number[];
   writtenQuestions?: number[];
   children: React.ReactNode;
+  isDarkMode?: boolean;
 }
 
 interface HighlightedOptionProps extends HighlightBaseProps {
@@ -105,13 +107,17 @@ const HighlightedOption: React.FC<HighlightedOptionProps> = ({
   isSelected,
   innerRef,
   innerProps,
+  isDarkMode,
 }) => {
   const { isCorrect, isWritten } = useHighlightLogic(dataValue, isCategory, category, correctQuestions, writtenQuestions);
+
+  const baseColor = isDarkMode ? "text-slate-100" : "text-black";
+  const focusedBg = isDarkMode ? "bg-slate-600" : "bg-blue-200";
 
   return (
     <div
       ref={innerRef}
-      className={`${className} ${isFocused && !isSelected ? "bg-blue-200" : ""} ${isSelected ? "bg-blue-500 focus:bg-blue-700 text-white" : ""} p-2`}
+      className={`${className} ${baseColor} ${isFocused && !isSelected ? focusedBg : ""} ${isSelected ? "bg-blue-500 focus:bg-blue-700 text-white" : ""} p-2`}
       {...innerProps}
     >
       <HighlightWrapper isCorrect={isCorrect} isWritten={isWritten}>
@@ -128,11 +134,12 @@ const HighlightedSingleValue: React.FC<HighlightedSingleValueProps> = ({
   correctQuestions,
   writtenQuestions,
   children,
+  isDarkMode,
 }) => {
   const { isCorrect, isWritten } = useHighlightLogic(dataValue, isCategory, category, correctQuestions, writtenQuestions);
 
   return (
-    <div className="text-black col-start-1 col-end-3 row-start-1 row-end-2">
+    <div className={`${isDarkMode ? "text-slate-100" : "text-black"} col-start-1 col-end-3 row-start-1 row-end-2`}>
       <HighlightWrapper isCorrect={isCorrect} isWritten={isWritten}>
         {children}
       </HighlightWrapper>
@@ -150,11 +157,39 @@ export const getQuestion = (id: number): Question | undefined => {
   return undefined;
 };
 
-const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQuestions, correctQuestions }) => {
+const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQuestions, correctQuestions, isDarkMode }) => {
   const [category, setCategory] = React.useState<number>();
   const [sequenceOptions, setSequenceOptions] = React.useState<{ value: string, label: string }[]>([]);
   const [sequence, setSequence] = React.useState<string>();
   const [question, setQuestion] = React.useState<Question>();
+
+  const darkModeStyles = {
+    control: (base: object) => ({
+      ...base,
+      backgroundColor: isDarkMode ? "#1e293b" : "#fff",
+      borderColor: isDarkMode ? "#475569" : "#d1d5db",
+    }),
+    menu: (base: object) => ({
+      ...base,
+      backgroundColor: isDarkMode ? "#1e293b" : "#fff",
+    }),
+    singleValue: (base: object) => ({
+      ...base,
+      color: isDarkMode ? "#f1f5f9" : "#000",
+    }),
+    input: (base: object) => ({
+      ...base,
+      color: isDarkMode ? "#f1f5f9" : "#000",
+    }),
+    indicatorSeparator: (base: object) => ({
+      ...base,
+      backgroundColor: isDarkMode ? "#475569" : "#d1d5db",
+    }),
+    dropdownIndicator: (base: object) => ({
+      ...base,
+      color: isDarkMode ? "#94a3b8" : "#6b7280",
+    }),
+  };
 
   useEffect(() => {
     const categoryObj = questions.find(q => q.category_id === category);
@@ -205,8 +240,9 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQu
 
   return (
     <div className="flex flex-wrap my-3 text-xl font-semibold w-full max-w-4xl justify-center">
-      <div className="flex">
-        Question: <Select options={questions.map(q => { return { value: String(q.category_id), label: String(q.display_number) }; }).flat()}
+      <div className="flex items-center">
+        <span className="mr-2">Question</span>
+        <Select options={questions.map(q => { return { value: String(q.category_id), label: String(q.display_number) }; }).flat()}
           value={options.find(o => o.value === String(category))}
           onChange={(e) => {
             if (!e) {
@@ -214,71 +250,72 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQu
             }
             setCategory(Number(e.value));
             setSequence(getInitialSequence(Number(e.value)));
-          }} 
-          className="text-black mr-3.5 ml-2"
+          }}
+          className="mr-3.5"
+          styles={darkModeStyles}
           components={{
             Option: (props) => (
               <HighlightedOption
                 {...props}
-                // I'm not quite sure why this error is happening, something seems wrong in react-select?
                 // eslint-disable-next-line react/prop-types
                 dataValue={props.data.value}
                 isCategory={true}
                 correctQuestions={correctQuestions}
                 writtenQuestions={writtenQuestions}
+                isDarkMode={isDarkMode}
               />
             ),
             SingleValue: (props) => (
               <HighlightedSingleValue
                 {...props}
-                // I'm not quite sure why this error is happening, something seems wrong in react-select?
                 // eslint-disable-next-line react/prop-types
                 dataValue={props.data.value}
                 isCategory={true}
                 correctQuestions={correctQuestions}
                 writtenQuestions={writtenQuestions}
+                isDarkMode={isDarkMode}
               />
             ),
           }}
-        
         />
       </div>
-      <div className="flex">
-        Variant: <Select options={sequenceOptions} value={sequenceOptions.find(o => o.value === sequence)} onChange={(e) => {
+      <div className="flex items-center">
+        <span className="mr-2">Variant</span>
+        <Select options={sequenceOptions} value={sequenceOptions.find(o => o.value === sequence)} onChange={(e) => {
           if (!e) {
             return;
           }
           setSequence(e.value);
-        }} className="text-black ml-2"
+        }}
+        styles={darkModeStyles}
         components={{
           Option: (props) => (
             <HighlightedOption
               {...props}
-              // I'm not quite sure why this error is happening, something seems wrong in react-select?
               // eslint-disable-next-line react/prop-types
               dataValue={props.data.value}
               isCategory={false}
               category={category}
               correctQuestions={correctQuestions}
               writtenQuestions={writtenQuestions}
+              isDarkMode={isDarkMode}
             />
           ),
           SingleValue: (props) => (
             <HighlightedSingleValue
               {...props}
-              // I'm not quite sure why this error is happening, something seems wrong in react-select?
               // eslint-disable-next-line react/prop-types
               dataValue={props.data.value}
               isCategory={false}
               category={category}
               correctQuestions={correctQuestions}
               writtenQuestions={writtenQuestions}
+              isDarkMode={isDarkMode}
             />
           ),
         }}
         />
       </div>
-
     </div>
   );
 

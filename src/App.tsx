@@ -31,7 +31,7 @@ import { format } from "sql-formatter";
 import initSqlJs from "sql.js";
 import ViewsTable, { View } from "./ViewsTable";
 
-import { InformationCircleIcon } from "@heroicons/react/24/solid";
+import { InformationCircleIcon, Cog6ToothIcon, XCircleIcon, CheckCircleIcon, EyeIcon } from "@heroicons/react/24/solid";
 import sha256 from "crypto-js/sha256";
 import { format as formatFns } from "date-fns";
 import { toPng } from "html-to-image";
@@ -70,6 +70,8 @@ function App() {
 
   const editorRef = useRef<Editor>(null);
   const exportModalRef = useRef<ExportSelectorModalHandle>(null);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
 
   // QuestionSelector needs writtenQuestions and correctQuestions to be able to display the correct state
   const [writtenQuestions, setWrittenQuestions] = useState<number[]>(localStorage.getItem("writtenQuestions") ? JSON.parse(localStorage.getItem("writtenQuestions")!) : []);
@@ -603,6 +605,17 @@ function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [exportData]);
 
+  // Close actions menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
+        setShowActionsMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // Png exports
   const exportImageQuery = useCallback(() => {
     if (question === undefined || !loadedQuestionCorrect || exportView) {
@@ -688,142 +701,173 @@ function App() {
         <ThemeToggle setTheme={setTheme} isDarkMode={isDarkMode}></ThemeToggle>
         <h1 className="text-6xl font-semibold my-3">SQL Validator</h1>
         <DatabaseLayoutDialog isDarkMode={isDarkMode} />
-        <QuestionSelector writtenQuestions={writtenQuestions} correctQuestions={correctQuestions} onSelect={(selectedQuestion) => {loadQuery(question, selectedQuestion); resetResult(); setQuestion(selectedQuestion);}}></QuestionSelector>
-        <p className="break-words max-w-4xl mb-4 font-semibold text-left text-xl p-2">{question?.description || "Select a question to get started!"}</p>
-        {query === undefined ? 
-          <Editor
-            id="placeholder-editor"
-            itemID="placeholder-editor"
-            value={"-- Select a question to get started!"}
-            disabled={true}
-            onValueChange={_code => null}
-            highlight={code => highlight(code, languages.sql)}
-            padding={10}
-            tabSize={2}
-            className="font-mono text-xl w-full max-w-4xl dark:bg-slate-800 bg-slate-200 min-h-40"
-            ref={editorRef}
-          />
-          : 
-          <Editor
-            id="editor"
-            itemID="editor"
-            value={query}
-            onValueChange={code => setQuery(code)}
-            highlight={code => highlight(code, languages.sql)}
-            padding={10}
-            tabSize={2}
-            className="font-mono text-xl w-full max-w-4xl dark:bg-slate-800 bg-slate-200 border-2 min-h-40 border-black dark:border-white"
-            ref={editorRef}
-          />
-        }
-        {error && <p className="font-mono text-red-500 max-w-4xl break-all">{error}</p>}
-        {correctQueryMismatch &&
-            <p className="font-mono text-yellow-500 max-w-4xl break-all">Query Mismatch! 
-              <span
-                className="text-yellow-500"
-                title="The current SQL query does not match the one that will be exported. The current version has either not been evaluated or gives an incorrect result. Please run the new query to register it as correct or use load saved to run the currently marked correct query."
+        <QuestionSelector writtenQuestions={writtenQuestions} correctQuestions={correctQuestions} isDarkMode={isDarkMode()} onSelect={(selectedQuestion) => {loadQuery(question, selectedQuestion); resetResult(); setQuestion(selectedQuestion);}}></QuestionSelector>
+        {question && <h2 className="text-2xl font-bold mt-4 mb-2">Fråga {question.category.display_number}{question.display_sequence}</h2>}
+        <p className="break-words max-w-4xl mb-4 text-left text-base p-2">{question?.description || "Select a question to get started!"}</p>
+
+        {/* Query Section with Header */}
+        <div className="w-full max-w-4xl">
+          <div className="flex justify-between items-center mb-2 px-1">
+            <span className="font-semibold text-lg">Query</span>
+            <div className="relative" ref={actionsMenuRef}>
+              <button
+                onClick={() => setShowActionsMenu(!showActionsMenu)}
+                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                aria-label="Actions menu"
               >
-                <InformationCircleIcon className="h-5 w-5 inline-block ml-1" />
-              </span>
-            </p>
-        }
-        <div className="flex flex-wrap justify-center text-base max-w-xl">
-          <button onClick={runQuery} disabled={!(error === null) || query === undefined} className="bg-blue-500 hover:bg-blue-700 disabled:bg-blue-300 disabled:opacity-50 text-white text-xl font-semibold py-2 px-4 mt-3.5 rounded mr-3 w-40" type="submit">Run Query</button>
-          <button onClick={() => {
-            if (!query) {
-              return;
-            }
-            setQuery(format(query, {
-              language: "sqlite",
-              tabWidth: 2,
-              useTabs: false,
-              keywordCase: "upper",
-              dataTypeCase: "upper",
-              functionCase: "upper",
-            }));}} disabled={!(error === null) || query === undefined} className="bg-blue-500 hover:bg-blue-700 disabled:bg-blue-300 disabled:opacity-50 text-white text-xl font-semibold py-2 px-4 mt-3.5 rounded mr-3 w-40" type="submit">
-            Format Code
-          </button>
-          <button onClick={() => {
-            if (!question) {
-              return;
-            }
-            setQuery(localStorage.getItem(`correctQuestionId-${question.id}`) || DEFAULT_QUERY);
-          }} 
-          disabled={!correctQueryMismatch || !question}
-          className="bg-yellow-500 hover:bg-yellow-700 disabled:bg-yellow-400 disabled:opacity-50 text-white text-xl font-semibold py-2 px-4 mt-3.5 rounded mr-3 w-40" type="submit">
-            Load Saved
-          </button>
-          {/* Might be removed fully, servers no purpose as it is right now */}
-          {/*
-          <button onClick={() => {
-            if (window.confirm('Are you sure you want to reset the database?\n\nNote: This will not reset your written answers.')) {
-              initDb();
-            }
-            }} className='bg-red-500 hover:bg-red-700 text-white text-xl font-semibold py-2 px-4 mt-4 rounded mr-3 w-40' type='submit'>Reset DB</button>
-          */}
-          <button onClick={exportImageQuery} className="bg-green-500 hover:bg-green-700 disabled:bg-green-400 disabled:opacity-50 text-white text-xl font-semibold py-2 px-4 mt-4 rounded mr-3 w-40" type="submit" disabled={!loadedQuestionCorrect}>Export PNG</button>
-          <button onClick={() => exportModalRef.current?.openDialog()} className="bg-blue-500 hover:bg-blue-700 text-white text-xl font-semibold py-2 px-4 mt-4 rounded mr-3 w-40" type="submit">Export Data</button>
-          <ExportSelectorModal correctQuestions={correctQuestions} onExport={(include) => exportData({include})} ref={exportModalRef} />
-          <button onClick={importData} className="bg-blue-500 hover:bg-blue-700 text-white text-xl font-semibold py-2 px-4 mt-4 rounded mr-3 w-40" type="submit">Import Data</button>
+                <Cog6ToothIcon className="w-5 h-5" />
+              </button>
+              {showActionsMenu && (
+                <div className="absolute right-0 mt-1 w-40 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-md shadow-lg z-10">
+                  <button
+                    onClick={() => { exportImageQuery(); setShowActionsMenu(false); }}
+                    disabled={!loadedQuestionCorrect}
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-50"
+                  >
+                    Export PNG
+                  </button>
+                  <button
+                    onClick={() => { importData(); setShowActionsMenu(false); }}
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-700"
+                  >
+                    Import Data
+                  </button>
+                  <button
+                    onClick={() => { exportModalRef.current?.openDialog(); setShowActionsMenu(false); }}
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-700"
+                  >
+                    Export Data
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          {query === undefined ?
+            <Editor
+              id="placeholder-editor"
+              itemID="placeholder-editor"
+              value={"-- Select a question to get started!"}
+              disabled={true}
+              onValueChange={_code => null}
+              highlight={code => highlight(code, languages.sql)}
+              padding={10}
+              tabSize={2}
+              className="font-mono text-base w-full dark:bg-slate-800 bg-slate-100 min-h-32 rounded-md"
+              ref={editorRef}
+            />
+            :
+            <Editor
+              id="editor"
+              itemID="editor"
+              value={query}
+              onValueChange={code => setQuery(code)}
+              highlight={code => highlight(code, languages.sql)}
+              padding={10}
+              tabSize={2}
+              className="font-mono text-base w-full dark:bg-slate-800 bg-slate-100 border dark:border-slate-600 border-gray-300 min-h-32 rounded-md"
+              ref={editorRef}
+            />
+          }
         </div>
 
-        <button 
-          onClick={() => {
-            if (showViewsTable && queryedView) {
-              resetResult();
-            }
-            setDisplayViewsTable(!showViewsTable);
-          }} 
-          className="bg-blue-500 hover:bg-blue-700 text-white text-xl font-semibold py-2 px-4 my-4 rounded mr-3 w-40"
-        >
-          {showViewsTable ? "Hide Views" : "Show Views"}
-        </button>
-        {showViewsTable && (
-          <>
-            <ViewsTable 
-              views={views} 
-              onRemoveView={(name) => deleteView(name)} 
-              onViewRequest={(name) => getViewResult(name)} 
-              currentlyQuriedView={queryedView}
-              onViewHideRequest={() => resetResult()}
-              onViewExportRequest={(name) => exportImageView(name)}
-            />
-            <div className="my-4"></div>
-          </>
-        )}
-        
+        {/* Error/Warning and Action Buttons - Same Row */}
+        <div className="flex items-center justify-between mt-3 w-full max-w-4xl">
+          {/* Left side - Messages */}
+          <div className="flex-1 min-w-0 mr-4 space-y-1">
+            {error && (
+              <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                <XCircleIcon className="w-5 h-5 flex-shrink-0" />
+                <span className="font-mono text-sm truncate">{error}</span>
+              </div>
+            )}
+            {correctQueryMismatch && (
+              <div className="flex items-center gap-2 text-yellow-600 dark:text-yellow-400">
+                <InformationCircleIcon className="w-5 h-5 flex-shrink-0" />
+                <span className="text-sm">Query mismatch - current query differs from your saved correct answer</span>
+              </div>
+            )}
+          </div>
 
+          {/* Right side - Buttons */}
+          <div className="flex gap-3 flex-shrink-0">
+            {correctQueryMismatch && (
+              <button
+                onClick={() => {
+                  if (!question) return;
+                  setQuery(localStorage.getItem(`correctQuestionId-${question.id}`) || DEFAULT_QUERY);
+                }}
+                className="border border-yellow-500 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 font-semibold py-2 px-4 rounded"
+              >
+                Load Saved
+              </button>
+            )}
+            <button
+              onClick={() => {
+                if (!query) return;
+                setQuery(format(query, {
+                  language: "sqlite",
+                  tabWidth: 2,
+                  useTabs: false,
+                  keywordCase: "upper",
+                  dataTypeCase: "upper",
+                  functionCase: "upper",
+                }));
+              }}
+              disabled={!(error === null) || query === undefined}
+              className="border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 font-semibold py-2 px-4 rounded"
+            >
+              Format Code
+            </button>
+            <button
+              onClick={runQuery}
+              disabled={!(error === null) || query === undefined}
+              className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded"
+            >
+              Run Query
+            </button>
+          </div>
+        </div>
+
+        <ExportSelectorModal correctQuestions={correctQuestions} onExport={(include) => exportData({include})} ref={exportModalRef} />
+
+        {/* Results Section */}
         {result && <>
           {!isViewResult ? question && <>
             {/* if correct result else display wrong result */}
-            {isCorrect ? <>
-              <h2 className="text-3xl font-semibold text-green-500">Matching Result!</h2>
-              <p className="break-words max-w-4xl mb-4 font-semibold text-left text-xl p-2 italic">... but it may not be correct! Make sure that all joins are complete and that the query only uses information from the assignment before exporting.</p>
-            </> : isCorrect === undefined ? 
-              <h2 className="text-3xl font-semibold text-blue-500">No result yet!</h2>
-              :
-              <h2 className="text-3xl font-semibold text-red-500">Wrong result!</h2>
-            }
+            {isCorrect ? (
+              <div className="flex items-center gap-2 mt-4 text-green-600 dark:text-green-400">
+                <CheckCircleIcon className="w-6 h-6" />
+                <span className="font-semibold text-lg">Matching Result!</span>
+              </div>
+            ) : isCorrect === undefined ? null : (
+              <div className="flex items-center gap-2 mt-4 text-red-600 dark:text-red-400">
+                <XCircleIcon className="w-6 h-6" />
+                <span className="font-semibold text-lg">Wrong result!</span>
+              </div>
+            )}
+            {isCorrect && (
+              <p className="text-sm max-w-4xl mb-2 text-left italic text-gray-600 dark:text-gray-400">
+                ... but it may not be correct! Make sure that all joins are complete and that the query only uses information from the assignment before exporting.
+              </p>
+            )}
             {/* Two different result tables next to each other, actual and expected */}
-            <div className="flex max-w-full py-4 justify-center">
-              <div className="flex-initial px-2 overflow-x-auto">
-                <h2 className="text-3xl font-semibold py-2">Actual</h2>
+            <div className="flex flex-wrap max-w-full py-4 justify-center gap-4">
+              <div className="flex-initial overflow-x-auto">
+                <h3 className="text-xl font-bold py-2">Actual</h3>
                 <div className="overflow-x-auto max-w-full">
                   <ResultTable result={result} />
                 </div>
               </div>
-              <div className="flex-initial px-2 overflow-x-auto">
-                <h2 className="text-3xl font-semibold py-2">Expected</h2>
+              <div className="flex-initial overflow-x-auto">
+                <h3 className="text-xl font-bold py-2">Expected</h3>
                 <div className="overflow-x-auto max-w-full">
                   <ResultTable result={question.evaluable_result} />
                 </div>
               </div>
             </div>
           </> : <>
-            <h2 className="text-3xl font-semibold">View {queryedView}</h2>
-            {/* code for the view */}
-            {/* <h2 className="text-3xl font-semibold">Query for {queryedView}</h2> */}
-            <p className="break-words max-w-4xl mb-4 font-semibold text-left text-xl p-2 italic">This is the query for view {queryedView}.</p>
+            <h2 className="text-2xl font-bold mt-4">View {queryedView}</h2>
+            <p className="text-sm max-w-4xl mb-2 text-left italic text-gray-600 dark:text-gray-400">This is the query for view {queryedView}.</p>
             <Editor
               readOnly={true}
               value={format(
@@ -839,19 +883,49 @@ function App() {
               highlight={code => highlight(code, languages.sql)}
               padding={10}
               tabSize={4}
-              className="font-mono text-xl w-full dark:bg-slate-800 bg-slate-200 border-2 max-w-4xl min-h-40 border-none my-2"
+              className="font-mono text-base w-full dark:bg-slate-800 bg-slate-100 max-w-4xl min-h-32 rounded-md my-2"
             />
-            {/* <h2 className="text-3xl font-semibold">Result of {queryedView}</h2> */}
-            <p className="break-words max-w-4xl mb-4 font-semibold text-left text-xl p-2 italic">... and this is the result of querying it with SELECT * FROM {queryedView};</p>
+            <p className="text-sm max-w-4xl mb-2 text-left italic text-gray-600 dark:text-gray-400">... and this is the result of querying it with SELECT * FROM {queryedView};</p>
             <div className="overflow-x-auto max-w-full">
               <ResultTable result={result} />
             </div>
           </>}
         </>}
-        <footer className="text-lg py-4 my-3">
-          <div className="flex flex-wrap mx-2 justify-center items-center gap-x-8 gap-y-4">
-            <p>Copyright &copy; <a href="https://github.com/Edwinexd" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">Edwin Sundberg</a> {new Date().getFullYear()} - <a href="https://github.com/Edwinexd/sql-validator?tab=GPL-3.0-1-ov-file" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">GPL-3.0</a></p>              
-            <p><a href="https://github.com/Edwinexd/sql-validator/issues" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">Report issues</a></p>
+
+        {/* Views Section */}
+        <div className="w-full max-w-4xl mt-6">
+          <button
+            onClick={() => {
+              if (showViewsTable && queryedView) {
+                resetResult();
+              }
+              setDisplayViewsTable(!showViewsTable);
+            }}
+            className="flex items-center gap-2 text-lg font-semibold hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+          >
+            <EyeIcon className="w-5 h-5" />
+            <span>Views</span>
+            <span className="text-sm font-normal text-gray-500">({views.length})</span>
+          </button>
+          {showViewsTable && views.length > 0 && (
+            <div className="mt-3">
+              <ViewsTable
+                views={views}
+                onRemoveView={(name) => deleteView(name)}
+                onViewRequest={(name) => getViewResult(name)}
+                currentlyQuriedView={queryedView}
+                onViewHideRequest={() => resetResult()}
+                onViewExportRequest={(name) => exportImageView(name)}
+              />
+            </div>
+          )}
+        </div>
+        <footer className="text-sm py-6 mt-8 border-t border-gray-200 dark:border-slate-700 w-full max-w-4xl">
+          <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-2 text-gray-600 dark:text-gray-400">
+            <span>Copyright &copy; <a href="https://github.com/Edwinexd" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">Edwin Sundberg</a> {new Date().getFullYear()}</span>
+            <span>-</span>
+            <a href="https://github.com/Edwinexd/sql-validator?tab=GPL-3.0-1-ov-file" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">GPL-3.0</a>
+            <a href="https://github.com/Edwinexd/sql-validator/issues" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">Report Issue</a>
             <PrivacyNoticeToggle></PrivacyNoticeToggle>
           </div>
         </footer>
