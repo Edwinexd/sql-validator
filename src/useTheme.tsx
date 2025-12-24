@@ -15,11 +15,21 @@ const useTheme = () => {
     }
 
     const applyTheme = () => {
-      if (localStorage.theme === "dark" || (!("theme" in localStorage) && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+      const isDark = localStorage.theme === "dark" || (!("theme" in localStorage) && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      if (isDark) {
         document.documentElement.classList.add("dark");
       } else {
         document.documentElement.classList.remove("dark");
       }
+      // Update theme-color meta tag
+      const themeColor = isDark ? "#1f2937" : "#f3f4f6";
+      let metaThemeColor = document.querySelector("meta[name=\"theme-color\"]:not([media])") as HTMLMetaElement | null;
+      if (!metaThemeColor) {
+        metaThemeColor = document.createElement("meta");
+        metaThemeColor.name = "theme-color";
+        document.head.appendChild(metaThemeColor);
+      }
+      metaThemeColor.content = themeColor;
     };
 
     applyTheme();
@@ -38,11 +48,22 @@ const useTheme = () => {
       localStorage.theme = theme;
     }
 
-    if (theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+    const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    if (isDark) {
       document.documentElement.classList.add("dark");
     } else {
       document.documentElement.classList.remove("dark");
     }
+
+    // Update theme-color meta tag
+    const themeColor = isDark ? "#1f2937" : "#f3f4f6";
+    let metaThemeColor = document.querySelector("meta[name=\"theme-color\"]:not([media])") as HTMLMetaElement | null;
+    if (!metaThemeColor) {
+      metaThemeColor = document.createElement("meta");
+      metaThemeColor.name = "theme-color";
+      document.head.appendChild(metaThemeColor);
+    }
+    metaThemeColor.content = themeColor;
   };
 
   const getTheme = () => {

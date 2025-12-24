@@ -31,7 +31,7 @@ import { format } from "sql-formatter";
 import initSqlJs from "sql.js";
 import ViewsTable, { View } from "./ViewsTable";
 
-import { InformationCircleIcon, Cog6ToothIcon, XCircleIcon, CheckCircleIcon, EyeIcon } from "@heroicons/react/24/solid";
+import { InformationCircleIcon, Cog6ToothIcon, XCircleIcon, CheckCircleIcon, EyeIcon, EyeSlashIcon } from "@heroicons/react/24/solid";
 import sha256 from "crypto-js/sha256";
 import { format as formatFns } from "date-fns";
 import { toPng } from "html-to-image";
@@ -130,9 +130,16 @@ function App() {
     }
 
     try {
-      const stmt = database.prepare(query);
-      // Needs to be called per the documentation
-      stmt.free();
+      // Check for multiple statements
+      let stmtCount = 0;
+      for (const stmt of database.iterateStatements(query)) {
+        stmtCount++;
+        stmt.free();
+        if (stmtCount > 1) {
+          setError("Multiple statements detected. Please run only one query at a time.");
+          return;
+        }
+      }
       setError(null);
     } catch (e) {
       // @ts-expect-error - Error.message is a string
@@ -650,19 +657,42 @@ function App() {
     // TODO: I'm not really a fan of this solution but without it the browser crashes due to downloading an extreme amount of files
     setExportingStatus(1);
 
+    const triggerDownload = (dataUrl: string, filename: string) => {
+      // Convert data URL to Blob for better browser compatibility
+      const byteString = atob(dataUrl.split(",")[1]);
+      const mimeType = dataUrl.split(",")[0].split(":")[1].split(";")[0];
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      const blob = new Blob([ab], { type: mimeType });
+      const blobUrl = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.download = filename;
+      link.href = blobUrl;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+
+      // Cleanup
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
+      }, 100);
+    };
+
     // View
     if (exportView) {
-      toPng(exportRendererRef.current, { 
+      toPng(exportRendererRef.current, {
         canvasWidth: exportRendererRef.current.clientWidth,
         width: exportRendererRef.current.clientWidth,
         canvasHeight: exportRendererRef.current.clientHeight,
         height: exportRendererRef.current.clientHeight,
-        pixelRatio: 1 
+        pixelRatio: 1
       }).then((dataUrl) => {
-        const link = document.createElement("a");
-        link.download = `validator_${exportView.name}.png`;
-        link.href = dataUrl;
-        link.click();
+        triggerDownload(dataUrl, `validator_${exportView.name}.png`);
         setExportView(undefined);
         setExportingStatus(0);
       });
@@ -675,17 +705,14 @@ function App() {
     }
 
     const exportRenderer = exportRendererRef.current;
-    toPng(exportRenderer, { 
+    toPng(exportRenderer, {
       canvasWidth: exportRenderer.clientWidth,
       width: exportRenderer.clientWidth,
       canvasHeight: exportRenderer.clientHeight,
       height: exportRenderer.clientHeight,
-      pixelRatio: 1 
+      pixelRatio: 1
     }).then((dataUrl) => {
-      const link = document.createElement("a");
-      link.download = `validator_${question.id}_${question.category.display_number}${question.display_sequence}.png`;
-      link.href = dataUrl;
-      link.click();
+      triggerDownload(dataUrl, `validator_${question.id}_${question.category.display_number}${question.display_sequence}.png`);
       setExportQuestion(undefined);
       setExportQuery(undefined);
       setExportingStatus(0);
@@ -771,18 +798,18 @@ function App() {
         </div>
 
         {/* Error/Warning and Action Buttons - Same Row */}
-        <div className="flex items-center justify-between mt-3 w-full max-w-4xl">
+        <div className="flex items-start justify-between mt-3 w-full max-w-4xl">
           {/* Left side - Messages */}
-          <div className="flex-1 min-w-0 mr-4 space-y-1">
+          <div className="space-y-1 text-left">
             {error && (
-              <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
-                <XCircleIcon className="w-5 h-5 flex-shrink-0" />
-                <span className="font-mono text-sm truncate">{error}</span>
+              <div className="flex items-start gap-2 text-red-600 dark:text-red-400">
+                <XCircleIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <span className="font-mono text-sm">{error}</span>
               </div>
             )}
             {correctQueryMismatch && (
-              <div className="flex items-center gap-2 text-yellow-600 dark:text-yellow-400">
-                <InformationCircleIcon className="w-5 h-5 flex-shrink-0" />
+              <div className="flex items-start gap-2 text-yellow-600 dark:text-yellow-400">
+                <InformationCircleIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
                 <span className="text-sm">Query mismatch - current query differs from your saved correct answer</span>
               </div>
             )}
@@ -903,7 +930,7 @@ function App() {
             }}
             className="flex items-center gap-2 text-lg font-semibold hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
           >
-            <EyeIcon className="w-5 h-5" />
+            {showViewsTable ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
             <span>Views</span>
             <span className="text-sm font-normal text-gray-500">({views.length})</span>
           </button>

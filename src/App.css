@@ -3,7 +3,7 @@
 }
 
 .App-header {
-  background-color: #efefef;
+  background-color: #f3f4f6;
   color: #313131;
   min-height: 100vh;
   display: flex;
@@ -15,7 +15,7 @@
 }
 
 .dark .App-header {
-  background-color: #011936;
+  background-color: #1f2937;
   color: white;
 }
 
@@ -23,11 +23,15 @@
   color: #61dafb;
 }
 
-body {
-  background-color: #efefef;
+html {
+  background-color: #f3f4f6;
 }
 
-.dark body {
-  background-color: #011936;
+html.dark {
+  background-color: #1f2937;
+}
+
+body {
+  background-color: inherit;
 }
 
