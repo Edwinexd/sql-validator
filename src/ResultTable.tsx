@@ -1,5 +1,13 @@
 import React from "react";
 import { Result } from "./utils";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface ResultTableProps {
   result: Result;
@@ -28,7 +36,6 @@ const ResultTable: React.FC<ResultTableProps> = ({ result, forceLight, forceFixe
     return className;
   };
 
-
   const columns = result.columns;
   let data = result.data;
 
@@ -36,44 +43,43 @@ const ResultTable: React.FC<ResultTableProps> = ({ result, forceLight, forceFixe
     return <div className="text-sm text-gray-500 dark:text-gray-400 italic">No results</div>;
   }
   let sliced = 0;
-  // Dont display more than 100 rows
   if (data.length > 100) {
     sliced = data.length - 100;
     data = data.slice(0, 100);
   }
   return (
     <>
-      <table className={`table-auto ${maybeFixedSizes("text-sm")} border-collapse`}>
-        <thead>
-          <tr>
+      <Table className={`table-auto ${maybeFixedSizes("text-sm")} border-collapse`}>
+        <TableHeader>
+          <TableRow>
             {columns.map((col, i) => (
-              <th
+              <TableHead
                 key={col + "-" + i}
                 className={`${maybeFixedSizes("px-3 py-2")} text-left font-semibold bg-gray-100 ${maybeRemoveDark("dark:bg-slate-700")} border-b border-gray-300 ${maybeRemoveDark("dark:border-slate-600")}`}
               >
                 {col}
-              </th>
+              </TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {data.map((row, i) => (
-            <tr
+            <TableRow
               key={i}
               className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} ${maybeRemoveDark(i % 2 === 0 ? "dark:bg-slate-800" : "dark:bg-slate-700")}`}
             >
               {row.map((cell, j) => (
-                <td
+                <TableCell
                   key={i + "-" + j}
                   className={`${maybeFixedSizes("px-3 py-2")} border-b border-gray-200 ${maybeRemoveDark("dark:border-slate-700")} ${maybeFixedSizes("whitespace-normal")}`}
                 >
                   {cell !== null ? <span>{cell}</span> : <span className="italic text-gray-400" title="NULL: No value">NULL</span>}
-                </td>
+                </TableCell>
               ))}
-            </tr>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       {sliced !== 0 && (
         <p className="text-sm italic text-gray-500 dark:text-gray-400 mt-2">... and {sliced} more rows</p>
       )}
@@ -82,4 +88,3 @@ const ResultTable: React.FC<ResultTableProps> = ({ result, forceLight, forceFixe
 };
 
 export default ResultTable;
-

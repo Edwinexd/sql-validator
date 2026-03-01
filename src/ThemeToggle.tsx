@@ -1,6 +1,6 @@
 import React from "react";
-
-import { SunIcon, MoonIcon } from "@heroicons/react/24/solid";
+import { Sun, Moon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface ThemeToggleProps {
   setTheme: (theme: "light" | "dark" | "system") => void;
@@ -9,16 +9,18 @@ interface ThemeToggleProps {
 
 const ThemeToggle: React.FC<ThemeToggleProps> = ({ setTheme, isDarkMode }) => {
   return (
-    <button
+    <Button
+      variant="ghost"
+      size="icon"
       onClick={() => {setTheme(isDarkMode() ? "light" : "dark");}}
-      className="p-2 rounded-full text-blue-500 dark:text-yellow-500 bg-transparent hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-600 dark:focus:ring-yellow-500 flex items-center justify-center"
+      className="text-blue-500 dark:text-yellow-500"
     >
       {isDarkMode() ? (
-        <SunIcon className="w-5 h-5 m-auto" />
+        <Sun className="h-5 w-5" />
       ) : (
-        <MoonIcon className="w-5 h-5 m-auto" />
+        <Moon className="h-5 w-5" />
       )}
-    </button>
+    </Button>
   );
 };
 

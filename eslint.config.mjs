@@ -7,6 +7,9 @@ import stylistic from "@stylistic/eslint-plugin";
 /** @type {import('eslint').Linter.Config[]} */
 export default [
   {
+    ignores: ["build/**"],
+  },
+  {
     files: ["**/*.{js,mjs,cjs,ts,jsx,tsx}"],
     plugins: {
       "@stylistic": stylistic
@@ -42,5 +45,17 @@ export default [
       "@stylistic/jsx-quotes": ["error"],
       "@stylistic/semi": ["error", "always"],
     }
+  },
+  {
+    files: ["src/components/ui/**/*.{ts,tsx}"],
+    rules: {
+      "react/prop-types": "off",
+    },
+  },
+  {
+    files: ["tailwind.config.js"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
   },
 ];

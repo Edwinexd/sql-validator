@@ -1,6 +1,8 @@
 import "prismjs/components/prism-sql";
 import "prismjs/themes/prism.css";
 import React from "react";
+import { Upload, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export interface View {
   name: string;
@@ -32,7 +34,7 @@ const ViewsTable: React.FC<ViewsTableProps> = ({ views, currentlyQuriedView, onR
                 onViewRequest(view.name);
               }
             }}
-            className={`text-left font-medium hover:underline ${
+            className={`text-left text-base font-medium hover:underline ${
               currentlyQuriedView === view.name
                 ? "text-blue-700 dark:text-blue-300"
                 : "text-blue-600 dark:text-blue-400"
@@ -40,25 +42,23 @@ const ViewsTable: React.FC<ViewsTableProps> = ({ views, currentlyQuriedView, onR
           >
             {view.name}
           </button>
-          <div className="flex items-center gap-4 text-sm">
-            <button
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
               onClick={() => onViewExportRequest(view.name)}
-              className="flex items-center gap-1 text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400"
+              className="text-sm text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
+              <Upload className="h-4 w-4 mr-1" />
               Export PNG
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
               onClick={() => onRemoveView(view.name)}
-              className="flex items-center gap-1 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+              className="text-sm text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
+              <Trash2 className="h-4 w-4 mr-1" />
               Delete
-            </button>
+            </Button>
           </div>
         </div>
       ))}
@@ -67,4 +67,3 @@ const ViewsTable: React.FC<ViewsTableProps> = ({ views, currentlyQuriedView, onR
 };
 
 export default ViewsTable;
-

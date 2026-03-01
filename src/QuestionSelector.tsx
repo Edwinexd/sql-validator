@@ -1,5 +1,11 @@
 import React, { useCallback, useEffect } from "react";
-import Select from "react-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import questions from "./questions.json";
 import { Result } from "./utils";
 
@@ -32,27 +38,6 @@ interface HighlightProps {
   isWritten: boolean;
   children: React.ReactNode;
 }
-
-interface HighlightBaseProps {
-  dataValue: string;
-  isCategory: boolean;
-  category?: number;
-  correctQuestions?: number[];
-  writtenQuestions?: number[];
-  children: React.ReactNode;
-  isDarkMode?: boolean;
-}
-
-interface HighlightedOptionProps extends HighlightBaseProps {
-  className?: string;
-  isDisabled?: boolean;
-  isFocused?: boolean;
-  isSelected?: boolean;
-  innerRef?: React.Ref<HTMLDivElement>;
-  innerProps?: React.HTMLAttributes<HTMLDivElement>;
-}
-
-type HighlightedSingleValueProps = HighlightBaseProps;
 
 const HighlightWrapper: React.FC<HighlightProps> = ({ isCorrect, isWritten, children }) => {
   if (isCorrect) {
@@ -94,56 +79,22 @@ const useHighlightLogic = (
   return { isCorrect, isWritten };
 };
 
-const HighlightedOption: React.FC<HighlightedOptionProps> = ({
-  dataValue,
-  isCategory,
-  category,
-  correctQuestions,
-  writtenQuestions,
-  children,
-  className,
-  isDisabled: _isDisabled,
-  isFocused,
-  isSelected,
-  innerRef,
-  innerProps,
-  isDarkMode,
-}) => {
-  const { isCorrect, isWritten } = useHighlightLogic(dataValue, isCategory, category, correctQuestions, writtenQuestions);
-
-  const baseColor = isDarkMode ? "text-slate-100" : "text-black";
-  const focusedBg = isDarkMode ? "bg-slate-600" : "bg-blue-200";
+const HighlightedSelectItem: React.FC<{
+  value: string;
+  isCategory: boolean;
+  category?: number;
+  correctQuestions?: number[];
+  writtenQuestions?: number[];
+  children: React.ReactNode;
+}> = ({ value, isCategory, category, correctQuestions, writtenQuestions, children }) => {
+  const { isCorrect, isWritten } = useHighlightLogic(value, isCategory, category, correctQuestions, writtenQuestions);
 
   return (
-    <div
-      ref={innerRef}
-      className={`${className} ${baseColor} ${isFocused && !isSelected ? focusedBg : ""} ${isSelected ? "bg-blue-500 focus:bg-blue-700 text-white" : ""} p-2`}
-      {...innerProps}
-    >
+    <SelectItem value={value}>
       <HighlightWrapper isCorrect={isCorrect} isWritten={isWritten}>
         {children}
       </HighlightWrapper>
-    </div>
-  );
-};
-
-const HighlightedSingleValue: React.FC<HighlightedSingleValueProps> = ({
-  dataValue,
-  isCategory,
-  category,
-  correctQuestions,
-  writtenQuestions,
-  children,
-  isDarkMode,
-}) => {
-  const { isCorrect, isWritten } = useHighlightLogic(dataValue, isCategory, category, correctQuestions, writtenQuestions);
-
-  return (
-    <div className={`${isDarkMode ? "text-slate-100" : "text-black"} col-start-1 col-end-3 row-start-1 row-end-2`}>
-      <HighlightWrapper isCorrect={isCorrect} isWritten={isWritten}>
-        {children}
-      </HighlightWrapper>
-    </div>
+    </SelectItem>
   );
 };
 
@@ -157,39 +108,11 @@ export const getQuestion = (id: number): Question | undefined => {
   return undefined;
 };
 
-const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQuestions, correctQuestions, isDarkMode }) => {
+const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQuestions, correctQuestions }) => {
   const [category, setCategory] = React.useState<number>();
   const [sequenceOptions, setSequenceOptions] = React.useState<{ value: string, label: string }[]>([]);
   const [sequence, setSequence] = React.useState<string>();
   const [question, setQuestion] = React.useState<Question>();
-
-  const darkModeStyles = {
-    control: (base: object) => ({
-      ...base,
-      backgroundColor: isDarkMode ? "#1e293b" : "#fff",
-      borderColor: isDarkMode ? "#475569" : "#d1d5db",
-    }),
-    menu: (base: object) => ({
-      ...base,
-      backgroundColor: isDarkMode ? "#1e293b" : "#fff",
-    }),
-    singleValue: (base: object) => ({
-      ...base,
-      color: isDarkMode ? "#f1f5f9" : "#000",
-    }),
-    input: (base: object) => ({
-      ...base,
-      color: isDarkMode ? "#f1f5f9" : "#000",
-    }),
-    indicatorSeparator: (base: object) => ({
-      ...base,
-      backgroundColor: isDarkMode ? "#475569" : "#d1d5db",
-    }),
-    dropdownIndicator: (base: object) => ({
-      ...base,
-      color: isDarkMode ? "#94a3b8" : "#6b7280",
-    }),
-  };
 
   useEffect(() => {
     const categoryObj = questions.find(q => q.category_id === category);
@@ -221,7 +144,6 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQu
     onSelect(questionObj);
   }, [sequence, category, question, onSelect, writtenQuestions, correctQuestions]);
 
-  // Chooses a) the first written question, b) the first correct question, or c) the first question in the category
   const getInitialSequence = useCallback((categoryId: number) => {
     const categoryObj = questions.find(q => q.category_id === categoryId)!;
     const written = categoryObj.questions.filter(q => writtenQuestions?.includes(q.id)).map(q => q.display_sequence).sort();
@@ -236,85 +158,80 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQu
     return "A";
   }, [writtenQuestions, correctQuestions]);
 
-  const options = questions.map(q => { return { value: String(q.category_id), label: String(q.display_number) }; }).flat();
+  // Build selected value display with highlight
+  const getCategoryHighlight = (catId: number | undefined) => {
+    if (catId === undefined) return null;
+    const { isCorrect, isWritten } = useHighlightLogic(String(catId), true, undefined, correctQuestions, writtenQuestions);
+    return (
+      <HighlightWrapper isCorrect={isCorrect} isWritten={isWritten}>
+        {String(catId)}
+      </HighlightWrapper>
+    );
+  };
+
+  const getSequenceHighlight = (seq: string | undefined) => {
+    if (seq === undefined) return null;
+    const { isCorrect, isWritten } = useHighlightLogic(seq, false, category, correctQuestions, writtenQuestions);
+    return (
+      <HighlightWrapper isCorrect={isCorrect} isWritten={isWritten}>
+        {seq}
+      </HighlightWrapper>
+    );
+  };
 
   return (
-    <div className="flex flex-wrap my-3 text-xl font-semibold w-full max-w-4xl justify-center">
+    <div className="flex flex-wrap my-3 text-base font-semibold w-full max-w-4xl justify-center">
       <div className="flex items-center">
         <span className="mr-2">Question</span>
-        <Select options={questions.map(q => { return { value: String(q.category_id), label: String(q.display_number) }; }).flat()}
-          value={options.find(o => o.value === String(category))}
-          onChange={(e) => {
-            if (!e) {
-              return;
-            }
-            setCategory(Number(e.value));
-            setSequence(getInitialSequence(Number(e.value)));
+        <Select
+          value={category !== undefined ? String(category) : undefined}
+          onValueChange={(value) => {
+            setCategory(Number(value));
+            setSequence(getInitialSequence(Number(value)));
           }}
-          className="mr-3.5"
-          styles={darkModeStyles}
-          components={{
-            Option: (props) => (
-              <HighlightedOption
-                {...props}
-                // eslint-disable-next-line react/prop-types
-                dataValue={props.data.value}
+        >
+          <SelectTrigger className="w-[100px] mr-3.5 text-base">
+            {category !== undefined ? getCategoryHighlight(category) : <SelectValue placeholder="..." />}
+          </SelectTrigger>
+          <SelectContent>
+            {questions.map(q => (
+              <HighlightedSelectItem
+                key={q.category_id}
+                value={String(q.category_id)}
                 isCategory={true}
                 correctQuestions={correctQuestions}
                 writtenQuestions={writtenQuestions}
-                isDarkMode={isDarkMode}
-              />
-            ),
-            SingleValue: (props) => (
-              <HighlightedSingleValue
-                {...props}
-                // eslint-disable-next-line react/prop-types
-                dataValue={props.data.value}
-                isCategory={true}
-                correctQuestions={correctQuestions}
-                writtenQuestions={writtenQuestions}
-                isDarkMode={isDarkMode}
-              />
-            ),
-          }}
-        />
+              >
+                {String(q.display_number)}
+              </HighlightedSelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div className="flex items-center">
         <span className="mr-2">Variant</span>
-        <Select options={sequenceOptions} value={sequenceOptions.find(o => o.value === sequence)} onChange={(e) => {
-          if (!e) {
-            return;
-          }
-          setSequence(e.value);
-        }}
-        styles={darkModeStyles}
-        components={{
-          Option: (props) => (
-            <HighlightedOption
-              {...props}
-              // eslint-disable-next-line react/prop-types
-              dataValue={props.data.value}
-              isCategory={false}
-              category={category}
-              correctQuestions={correctQuestions}
-              writtenQuestions={writtenQuestions}
-              isDarkMode={isDarkMode}
-            />
-          ),
-          SingleValue: (props) => (
-            <HighlightedSingleValue
-              {...props}
-              // eslint-disable-next-line react/prop-types
-              dataValue={props.data.value}
-              isCategory={false}
-              category={category}
-              correctQuestions={correctQuestions}
-              writtenQuestions={writtenQuestions}
-              isDarkMode={isDarkMode}
-            />
-          ),
-        }}
-        />
+        <Select
+          value={sequence}
+          onValueChange={(value) => setSequence(value)}
+        >
+          <SelectTrigger className="w-[100px] text-base">
+            {sequence !== undefined ? getSequenceHighlight(sequence) : <SelectValue placeholder="..." />}
+          </SelectTrigger>
+          <SelectContent>
+            {sequenceOptions.map(opt => (
+              <HighlightedSelectItem
+                key={opt.value}
+                value={opt.value}
+                isCategory={false}
+                category={category}
+                correctQuestions={correctQuestions}
+                writtenQuestions={writtenQuestions}
+              >
+                {opt.label}
+              </HighlightedSelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     </div>
   );

@@ -1,12 +1,12 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import dbLayoutDark from "./db_layout_dark.svg";
 import dbLayoutLight from "./db_layout_light.svg";
 import dbLayoutLightPng from "./db_layout_light_bg.png";
-import { XMarkIcon } from "@heroicons/react/24/solid";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { X } from "lucide-react";
 
 const DatabaseLayoutDialog = ({ isDarkMode }: { isDarkMode: () => boolean }) => {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const openDialog = () => {
     const isSmallScreen = window.matchMedia("(max-width: 48rem)").matches;
@@ -15,13 +15,7 @@ const DatabaseLayoutDialog = ({ isDarkMode }: { isDarkMode: () => boolean }) => 
       window.open(dbLayoutLightPng, "_blank");
       return;
     }
-    dialogRef.current?.showModal();
-    setIsDialogOpen(true);
-  };
-
-  const closeDialog = () => {
-    dialogRef.current?.close();
-    setIsDialogOpen(false);
+    setOpen(true);
   };
 
   return (
@@ -38,28 +32,25 @@ const DatabaseLayoutDialog = ({ isDarkMode }: { isDarkMode: () => boolean }) => 
         />
       </button>
 
-      <dialog
-        ref={dialogRef}
-        onClick={closeDialog}
-        onCancel={closeDialog}
-        // This is not a good solution (flex) but I spent too much time on this already / Edwin 2024-12-07
-        className={`rounded-lg shadow-lg border item-center justify-center dark:border-slate-700 dark:bg-slate-950/90 bg-slate-50/90 ${isDialogOpen ? "flex" : ""}`}
-      >
-        <div className="relative">
-          <button
-            onClick={closeDialog}
-            className="absolute top-4 right-4 text-red-500 hover:text-red-700"
-            aria-label="Close dialog"
-          >
-            <XMarkIcon className="w-10 h-10" />
-          </button>
-          <img
-            src={isDarkMode() ? dbLayoutDark : dbLayoutLight}
-            alt="Database Layout"
-            className="w-full h-full cursor-zoom-out"
-          />
-        </div>
-      </dialog>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 border dark:border-slate-700 dark:bg-slate-950/90 bg-slate-50/90 [&>button]:hidden">
+          <div className="relative">
+            <button
+              onClick={() => setOpen(false)}
+              className="absolute top-4 right-4 text-red-500 hover:text-red-700 z-10"
+              aria-label="Close dialog"
+            >
+              <X className="w-10 h-10" />
+            </button>
+            <img
+              src={isDarkMode() ? dbLayoutDark : dbLayoutLight}
+              alt="Database Layout"
+              className="w-full h-full cursor-zoom-out"
+              onClick={() => setOpen(false)}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

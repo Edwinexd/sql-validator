@@ -1,7 +1,8 @@
-import "@djthoms/pretty-checkbox";
-import { XMarkIcon } from "@heroicons/react/24/solid";
-import { Checkbox } from "pretty-checkbox-react";
-import React, { forwardRef, useImperativeHandle, useRef } from "react";
+import { forwardRef, useImperativeHandle, useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { getQuestion } from "./QuestionSelector";
 
 interface ExportSelectorModalProps {
@@ -16,88 +17,80 @@ export interface ExportSelectorModalHandle {
 
 const ExportSelectorModal = forwardRef<ExportSelectorModalHandle, ExportSelectorModalProps>(
   ({ correctQuestions, onExport }, ref) => {
-    const [includeAll, setIncludeAll] = React.useState<boolean>(true);
-    const [dontInclude, setDontInclude] = React.useState<number[]>([]);
-
-    const dialogRef = useRef<HTMLDialogElement>(null);
+    const [includeAll, setIncludeAll] = useState<boolean>(true);
+    const [dontInclude, setDontInclude] = useState<number[]>([]);
+    const [open, setOpen] = useState(false);
 
     useImperativeHandle(ref, () => ({
-      openDialog: openDialog,
-      closeDialog: closeDialog,
+      openDialog: () => setOpen(true),
+      closeDialog: () => setOpen(false),
     }));
 
-    const openDialog = () => dialogRef.current?.showModal();
-    const closeDialog = () => dialogRef.current?.close();
-
     return (
-      <div>
-        <dialog ref={dialogRef} className="rounded-lg max-w-4xl w-full p-6 shadow-lg border dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-semibold">Export Data</h2>
-            <XMarkIcon className="w-6 h-6 cursor-pointer text-red-500 hover:text-red-700" onClick={closeDialog} />
-          </div>
-          <p className="text-left text-lg font-medium mb-4">Choose to export all questions or only selected questions to a save file.</p>
-          <div className="flex items-center mb-4 text-lg">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">Export Data</DialogTitle>
+          </DialogHeader>
+          <p className="text-left text-base font-medium mb-4">Choose to export all questions or only selected questions to a save file.</p>
+          <div className="flex items-center space-x-2 mb-4">
             <Checkbox
-              color="primary"
-              shape="curve"
+              id="include-all"
               checked={includeAll}
-              onChange={(e) => setIncludeAll(e.target.checked)}
-            >
-              Include all questions
-            </Checkbox>
+              onCheckedChange={(checked) => setIncludeAll(checked === true)}
+            />
+            <Label htmlFor="include-all" className="text-base cursor-pointer">Include all questions</Label>
           </div>
           {!includeAll && correctQuestions.length > 0 &&
           <>
-            <p className="text-lg font-medium mb-4">Only include ...</p>
-            <div className="grid grid-cols-4 gap-4 text-lg">
+            <p className="text-base font-medium mb-4">Only include ...</p>
+            <div className="grid grid-cols-4 gap-4">
               {correctQuestions.map(questionId => getQuestion(questionId)!).sort((a, b) => a.display_sequence.localeCompare(b.display_sequence)).sort((a, b) => Number(a.category.display_number) - Number(b.category.display_number)).map(q => (
-                <div key={q.id} className="flex items-center">
+                <div key={q.id} className="flex items-center space-x-2">
                   <Checkbox
-                    color="primary"
-                    shape="curve"
+                    id={`q-${q.id}`}
                     checked={!dontInclude.includes(q.id)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
+                    onCheckedChange={(checked) => {
+                      if (checked) {
                         setDontInclude(dontInclude.filter((i) => i !== q.id));
                       } else {
                         setDontInclude([...dontInclude, q.id]);
                       }
                     }}
-                  >
+                  />
+                  <Label htmlFor={`q-${q.id}`} className="text-base cursor-pointer">
                     {q.category.display_number}{q.display_sequence}
-                  </Checkbox>
+                  </Label>
                 </div>
               ))}
             </div>
           </>
           }
           {!includeAll && correctQuestions.length === 0 &&
-          <p className="text-lg font-medium text-red-500">No questions are completed - nothing to export as correct to file (partial answers are always included).</p>
+          <p className="text-base font-medium text-red-500">No questions are completed - nothing to export as correct to file (partial answers are always included).</p>
           }
-          <div className="mt-3.5">
-            <button 
+          <div className="mt-3.5 flex gap-3">
+            <Button
               onClick={() => {
                 if (includeAll) {
                   onExport(correctQuestions);
                 } else {
                   onExport(correctQuestions.filter((q) => !dontInclude.includes(q)));
                 }
-                closeDialog();
+                setOpen(false);
               }}
-              className="bg-blue-500 hover:bg-blue-700 text-white text-lg font-semibold py-2 px-4 mt-3.5 rounded mr-3 w-44"
             >
               Export {includeAll ? "All" : "Selected"}
-            </button>
-            <button 
-              onClick={closeDialog} 
-              className="bg-red-500 hover:bg-red-700 text-white text-lg font-semibold py-2 px-4 mt-3.5 rounded w-44"
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => setOpen(false)}
             >
               Abort
-            </button>
+            </Button>
           </div>
-        </dialog>
-      </div>
+        </DialogContent>
+      </Dialog>
     );
   });
 

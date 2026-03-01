@@ -15,11 +15,6 @@ declare module "*.png" {
   export default content;
 }
 
-declare module "@djthoms/pretty-checkbox" {
-  const content: unknown;
-  export default content;
-}
-
 declare interface ImportMetaEnv {
   readonly VITE_PRIVACY_CF_WEB_ANALYTICS: string | undefined;
   readonly VITE_PRIVACY_COMPANY_NAME: string | undefined;
