@@ -25,3 +25,23 @@ html {
 body {
   background-color: inherit;
 }
+
+.diff-removed-line {
+  background-color: rgba(239, 68, 68, 0.2);
+  display: inline-block;
+  width: 100%;
+}
+
+.dark .diff-removed-line {
+  background-color: rgba(239, 68, 68, 0.15);
+}
+
+.diff-added-line {
+  background-color: rgba(34, 197, 94, 0.2);
+  display: inline-block;
+  width: 100%;
+}
+
+.dark .diff-added-line {
+  background-color: rgba(34, 197, 94, 0.15);
+}

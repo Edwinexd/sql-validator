@@ -49,6 +49,8 @@ import useTheme from "./useTheme";
 import { isCorrectResult, Result } from "./utils";
 import DatabaseLayoutDialog from "./DatabaseLayoutDialog";
 import ExportSelectorModal, { ExportSelectorModalHandle } from "./ExportSelectorModal";
+import ImportDialog, { ImportDialogHandle } from "./ImportDialog";
+import { ParsedSaveData, parseImportFile, getLocalData, detectConflicts } from "./mergeUtils";
 
 const DEFAULT_QUERY = "SELECT * FROM student;";
 
@@ -77,6 +79,8 @@ function App() {
 
   const editorRef = useRef<Editor>(null);
   const exportModalRef = useRef<ExportSelectorModalHandle>(null);
+  const importDialogRef = useRef<ImportDialogHandle>(null);
+  const [pendingImportData, setPendingImportData] = useState<ParsedSaveData | null>(null);
 
   // QuestionSelector needs writtenQuestions and correctQuestions to be able to display the correct state
   const [writtenQuestions, setWrittenQuestions] = useState<number[]>(localStorage.getItem("writtenQuestions") ? JSON.parse(localStorage.getItem("writtenQuestions")!) : []);
@@ -508,78 +512,42 @@ function App() {
     URL.revokeObjectURL(url);
   }, [database, views]);
 
-  const upsertData = useCallback((data: string) => {
-    // Extract raw queries
-    const rawQueries = data.match(/\/\*\s--- BEGIN Raw Queries --- \*\/\n\/\*\n([\s\S]*?)\n\*\/\n\/\*\s--- END Raw Queries --- \*\//)![1];
-    const parsedQueries: { [key: string]: string } = JSON.parse(rawQueries.replace(/\\\*\//g, "*/"));
-
-    // Correct raw queries
-    const correctRawQueries = data.match(/\/\*\s--- BEGIN Correct Raw Queries --- \*\/\n\/\*\n([\s\S]*?)\n\*\/\n\/\*\s--- END Correct Raw Queries --- \*\//)![1];
-    const parsedCorrectQueries: { [key: string]: string } = JSON.parse(correctRawQueries.replace(/\\\*\//g, "*/"));
-    
+  const applyMergedData = useCallback((merged: ParsedSaveData) => {
     // Clear current data
-    const writtenQuestions: number[] = JSON.parse(localStorage.getItem("writtenQuestions") || "[]");
-    writtenQuestions.forEach(id => {
-      localStorage.removeItem(`questionId-${id}`);
-    });
-
-    const correctQuestions: number[] = JSON.parse(localStorage.getItem("correctQuestions") || "[]");
-    correctQuestions.forEach(id => {
-      localStorage.removeItem(`correctQuestionId-${id}`);
-    });
-
+    const oldWritten: number[] = JSON.parse(localStorage.getItem("writtenQuestions") || "[]");
+    oldWritten.forEach(id => localStorage.removeItem(`questionId-${id}`));
+    const oldCorrect: number[] = JSON.parse(localStorage.getItem("correctQuestions") || "[]");
+    oldCorrect.forEach(id => localStorage.removeItem(`correctQuestionId-${id}`));
     localStorage.removeItem("writtenQuestions");
     localStorage.removeItem("correctQuestions");
-    
-    // Insert new data
-    for (const [key, value] of Object.entries(parsedQueries)) {
+
+    // Write merged data
+    for (const [key, value] of Object.entries(merged.rawQueries)) {
       localStorage.setItem(`questionId-${key}`, value);
       if (question !== undefined && Number(key) === question.id) {
         setQuery(value);
       }
     }
-
-    for (const [key, value] of Object.entries(parsedCorrectQueries)) {
+    for (const [key, value] of Object.entries(merged.correctQueries)) {
       localStorage.setItem(`correctQuestionId-${key}`, value);
     }
-    
-    // Extract and load raw list dumps
-    const rawLists = data.match(/\/\*\s--- BEGIN Raw List Dumps --- \*\/\n--\s(.*)\n--\s(.*)\n\/\*\s--- END Raw List Dumps --- \*\//)!;
-    
 
-    const newWrittenQuestions = JSON.parse(rawLists[1]);
-    const newCorrectQuestions = JSON.parse(rawLists[2]);
-    setWrittenQuestions(newWrittenQuestions);
-    setCorrectQuestions(newCorrectQuestions);
-    localStorage.setItem("writtenQuestions", JSON.stringify(newWrittenQuestions));
-    localStorage.setItem("correctQuestions", JSON.stringify(newCorrectQuestions));
-    
-    // Upsert views
-    // Delete all current views
+    setWrittenQuestions(merged.writtenQuestionIds);
+    setCorrectQuestions(merged.correctQuestionIds);
+    localStorage.setItem("writtenQuestions", JSON.stringify(merged.writtenQuestionIds));
+    localStorage.setItem("correctQuestions", JSON.stringify(merged.correctQuestionIds));
+
+    // Update views in database
     for (const view of views) {
       database!.exec(`DROP VIEW ${view.name}`);
     }
-
-    const viewsBlock = data.match(/\/\*\s--- BEGIN Views --- \*\/\n([\s\S]*?)\n\/\*\s--- END Views --- \*\//);
-    if (viewsBlock) {
-      const viewsData = viewsBlock[1];
-      const newViews = viewsData.match(/\/\*\s--- BEGIN View (.*) --- \*\/\n([\s\S]*?)\n\/\*\s--- END View (.*) --- \*\//g)!;
-      for (const view of newViews) {
-        // const viewName = view.match(/\/\*\s--- BEGIN View (.*) --- \*\//)![1];
-        const viewQuery = view.match(/\/\*\s--- BEGIN View (.*) --- \*\/\n([\s\S]*?)\n\/\*\s--- END View (.*) --- \*\//)![2];
-        database!.exec(viewQuery);
-      }
+    for (const view of merged.views) {
+      database!.exec(view.query);
     }
-
     refreshViews(true);
   }, [database, question, refreshViews, views]);
 
   const importData = useCallback(() => {
-    // Confirm that the user wants to import data, it will overwrite the current data
-    if (!window.confirm("Are you sure you want to import data?\n\nNote: This will overwrite your current data.")) {
-      return;
-    }
-
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".sql";
@@ -598,12 +566,16 @@ function App() {
         if (!data) {
           return;
         }
-        upsertData(data);
+        const parsed = parseImportFile(data);
+        setPendingImportData(parsed);
+        const local = getLocalData();
+        const analysis = detectConflicts(local, parsed);
+        importDialogRef.current?.open(analysis);
       };
       reader.readAsText(file);
     };
     input.click();
-  }, [upsertData]);
+  }, []);
 
   // Overriding default behavior for ctrl+s to call exportData instead
   useEffect(() => {
@@ -797,6 +769,7 @@ function App() {
                 <span className="text-sm">Query mismatch - current query differs from your saved correct answer</span>
               </div>
             )}
+            <a href="https://github.com/Edwinexd/db-sqlite-tools/releases/latest/download/DB_SQLite_Implementation_Tools.pdf" target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">SQLite Datatypes & Date Handling Reference (Ch. 3)</a>
           </div>
 
           {/* Right side - Buttons */}
@@ -841,6 +814,14 @@ function App() {
         </div>
 
         <ExportSelectorModal correctQuestions={correctQuestions} onExport={(include) => exportData({include})} ref={exportModalRef} />
+        <ImportDialog
+          importedData={pendingImportData}
+          onOverwrite={() => {
+            if (pendingImportData) applyMergedData(pendingImportData);
+          }}
+          onMergeApply={(merged) => applyMergedData(merged)}
+          ref={importDialogRef}
+        />
 
         {/* Results Section */}
         {result && <>
