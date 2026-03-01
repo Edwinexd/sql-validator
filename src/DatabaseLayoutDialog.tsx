@@ -28,7 +28,7 @@ const DatabaseLayoutDialog = ({ isDarkMode }: { isDarkMode: () => boolean }) => 
         <img
           src={isDarkMode() ? dbLayoutDark : dbLayoutLight}
           alt="Database Layout"
-          className="w-full h-full"
+          className="w-full h-full object-contain"
         />
       </button>
 
@@ -45,7 +45,7 @@ const DatabaseLayoutDialog = ({ isDarkMode }: { isDarkMode: () => boolean }) => 
             <img
               src={isDarkMode() ? dbLayoutDark : dbLayoutLight}
               alt="Database Layout"
-              className="w-full h-full cursor-zoom-out"
+              className="max-w-full max-h-[90vh] object-contain cursor-zoom-out"
               onClick={() => setOpen(false)}
             />
           </div>
