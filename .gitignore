@@ -27,6 +27,7 @@ yarn-error.log*
 
 .vscode
 
-scripts
+scripts/*
+!scripts/generate-screenshots.mjs
 
 public/dist
