@@ -482,8 +482,11 @@ function App() {
 
     output += "/* --- BEGIN Metadata --- */\n";
     output += "/* --- BEGIN Save Format Version --- */\n";
-    output += "-- 2\n";
+    output += "-- 3\n";
     output += "/* --- END Save Format Version --- */\n";
+    output += "/* --- BEGIN Save Language --- */\n";
+    output += `-- ${lang}\n`;
+    output += "/* --- END Save Language --- */\n";
     output += "/* --- END Metadata --- */\n";
 
     output += "/* --- BEGIN Validation --- */\n";

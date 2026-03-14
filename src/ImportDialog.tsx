@@ -164,6 +164,11 @@ const ImportDialog = forwardRef<ImportDialogHandle, ImportDialogProps>(
                     {t("howToImport")}
                   </DialogDescription>
                 </DialogHeader>
+                {importedData && importedData.language !== lang && (
+                  <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-1">
+                    {t("languageMismatchWarning", { fileLang: importedData.language })}
+                  </p>
+                )}
                 <div className="flex gap-3 mt-2">
                   <Button onClick={handleOverwrite} variant="destructive">
                     {t("overwriteAll")}
