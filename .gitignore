@@ -30,6 +30,7 @@ yarn-error.log*
 scripts/*
 !scripts/generate-screenshots.mjs
 !scripts/encrypt-oracle.ts
+!scripts/decrypt-oracle.ts
 !scripts/generate-language.ts
 !scripts/extract-oracle.ts
 !scripts/generate-erd.ts
