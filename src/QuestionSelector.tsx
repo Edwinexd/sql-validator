@@ -6,8 +6,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import questions from "./questions.json";
 import { Result } from "./utils";
+import { useLanguage, QuestionCategory } from "./i18n/context";
 
 export interface Category {
   id: number;
@@ -21,7 +21,7 @@ export interface Question {
   display_sequence: string;
   result: {
     columns: string[];
-    values: (string | number)[][];
+    values: (string | number | null)[][];
   };
   evaluable_result: Result;
 }
@@ -31,6 +31,8 @@ interface QuestionSelectorProps {
   writtenQuestions?: number[];
   correctQuestions?: number[];
   isDarkMode?: boolean;
+  /** Externally-set question (e.g. from URL param) to sync selector state */
+  activeQuestion?: Question;
 }
 
 interface HighlightProps {
@@ -54,6 +56,7 @@ const useHighlightLogic = (
   dataValue: string,
   isCategory: boolean,
   category: number | undefined,
+  questions: QuestionCategory[],
   correctQuestions?: number[],
   writtenQuestions?: number[]
 ) => {
@@ -83,11 +86,12 @@ const HighlightedSelectItem: React.FC<{
   value: string;
   isCategory: boolean;
   category?: number;
+  questions: QuestionCategory[];
   correctQuestions?: number[];
   writtenQuestions?: number[];
   children: React.ReactNode;
-}> = ({ value, isCategory, category, correctQuestions, writtenQuestions, children }) => {
-  const { isCorrect, isWritten } = useHighlightLogic(value, isCategory, category, correctQuestions, writtenQuestions);
+}> = ({ value, isCategory, category, questions, correctQuestions, writtenQuestions, children }) => {
+  const { isCorrect, isWritten } = useHighlightLogic(value, isCategory, category, questions, correctQuestions, writtenQuestions);
 
   return (
     <SelectItem value={value}>
@@ -98,7 +102,7 @@ const HighlightedSelectItem: React.FC<{
   );
 };
 
-export const getQuestion = (id: number): Question | undefined => {
+export const getQuestion = (id: number, questions: QuestionCategory[]): Question | undefined => {
   for (const category of questions) {
     const question = category.questions.find(q => q.id === id);
     if (question) {
@@ -108,11 +112,23 @@ export const getQuestion = (id: number): Question | undefined => {
   return undefined;
 };
 
-const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQuestions, correctQuestions }) => {
+const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQuestions, correctQuestions, activeQuestion }) => {
+  const { t, questions } = useLanguage();
   const [category, setCategory] = React.useState<number>();
   const [sequenceOptions, setSequenceOptions] = React.useState<{ value: string, label: string }[]>([]);
   const [sequence, setSequence] = React.useState<string>();
   const [question, setQuestion] = React.useState<Question>();
+
+  // Sync selector state when an external question is set (e.g. from URL)
+  const prevActiveRef = React.useRef<Question | undefined>(undefined);
+  useEffect(() => {
+    if (activeQuestion && activeQuestion !== prevActiveRef.current) {
+      prevActiveRef.current = activeQuestion;
+      setCategory(activeQuestion.category.id);
+      setSequence(activeQuestion.display_sequence);
+      setQuestion(activeQuestion);
+    }
+  }, [activeQuestion]);
 
   useEffect(() => {
     const categoryObj = questions.find(q => q.category_id === category);
@@ -120,7 +136,7 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQu
       return;
     }
     setSequenceOptions(categoryObj.questions.map(q => { return { value: String(q.display_sequence), label: String(q.display_sequence) }; }).flat());
-  }, [category]);
+  }, [category, questions]);
 
   useEffect(() => {
     if (!category) {
@@ -142,7 +158,7 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQu
     const questionObj = {...rawQuestionObj, category: { id: category, display_number: String(category) }, evaluable_result: { columns: rawQuestionObj.result.columns, data: rawQuestionObj.result.values } };
     setQuestion(questionObj);
     onSelect(questionObj);
-  }, [sequence, category, question, onSelect, writtenQuestions, correctQuestions]);
+  }, [sequence, category, question, onSelect, writtenQuestions, correctQuestions, questions]);
 
   const getInitialSequence = useCallback((categoryId: number) => {
     const categoryObj = questions.find(q => q.category_id === categoryId)!;
@@ -156,12 +172,12 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQu
       return correct[0];
     }
     return "A";
-  }, [writtenQuestions, correctQuestions]);
+  }, [writtenQuestions, correctQuestions, questions]);
 
   // Build selected value display with highlight
   const getCategoryHighlight = (catId: number | undefined) => {
     if (catId === undefined) return null;
-    const { isCorrect, isWritten } = useHighlightLogic(String(catId), true, undefined, correctQuestions, writtenQuestions);
+    const { isCorrect, isWritten } = useHighlightLogic(String(catId), true, undefined, questions, correctQuestions, writtenQuestions);
     return (
       <HighlightWrapper isCorrect={isCorrect} isWritten={isWritten}>
         {String(catId)}
@@ -171,7 +187,7 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQu
 
   const getSequenceHighlight = (seq: string | undefined) => {
     if (seq === undefined) return null;
-    const { isCorrect, isWritten } = useHighlightLogic(seq, false, category, correctQuestions, writtenQuestions);
+    const { isCorrect, isWritten } = useHighlightLogic(seq, false, category, questions, correctQuestions, writtenQuestions);
     return (
       <HighlightWrapper isCorrect={isCorrect} isWritten={isWritten}>
         {seq}
@@ -182,7 +198,7 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQu
   return (
     <div className="flex flex-wrap my-3 text-base font-semibold w-full max-w-4xl justify-center">
       <div className="flex items-center">
-        <span className="mr-2">Question</span>
+        <span className="mr-2">{t("question")}</span>
         <Select
           value={category !== undefined ? String(category) : undefined}
           onValueChange={(value) => {
@@ -199,6 +215,7 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQu
                 key={q.category_id}
                 value={String(q.category_id)}
                 isCategory={true}
+                questions={questions}
                 correctQuestions={correctQuestions}
                 writtenQuestions={writtenQuestions}
               >
@@ -209,7 +226,7 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQu
         </Select>
       </div>
       <div className="flex items-center">
-        <span className="mr-2">Variant</span>
+        <span className="mr-2">{t("variant")}</span>
         <Select
           value={sequence}
           onValueChange={(value) => setSequence(value)}
@@ -224,6 +241,7 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQu
                 value={opt.value}
                 isCategory={false}
                 category={category}
+                questions={questions}
                 correctQuestions={correctQuestions}
                 writtenQuestions={writtenQuestions}
               >

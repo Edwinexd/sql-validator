@@ -44,7 +44,11 @@
     "preview": "vite preview",
     "copy-sqljs": "copyfiles -f node_modules/sql.js/dist/sql-wasm.wasm public/dist/sql.js/",
     "start-vite": "vite",
-    "build-vite": "tsc -b && vite build"
+    "build-vite": "tsc -b && vite build",
+    "generate-lang": "tsx scripts/generate-language.ts",
+    "encrypt-oracle": "tsx scripts/encrypt-oracle.ts",
+    "generate-erd": "tsx scripts/generate-erd.ts",
+    "generate-all": "tsx scripts/generate-language.ts --lang sv --plain && tsx scripts/generate-erd.ts --db public/languages/sv/data.sqlite3 --out public/languages/sv && tsx scripts/generate-language.ts --lang en --plain && tsx scripts/generate-erd.ts --db public/languages/en/data.sqlite3 --out public/languages/en"
   },
   "eslintConfig": {
     "extends": [
@@ -67,6 +71,7 @@
   "devDependencies": {
     "@eslint/js": "^9.15.0",
     "@stylistic/eslint-plugin": "^2.11.0",
+    "@types/jsdom": "^28.0.0",
     "@types/node": "^22.18.10",
     "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.21",
@@ -74,10 +79,13 @@
     "eslint": "^8.57.1",
     "eslint-plugin-react": "^7.37.2",
     "globals": "^15.12.0",
+    "jsdom": "^28.1.0",
     "npm-run-all": "^4.1.5",
     "playwright": "^1.58.2",
     "postcss": "^8.5.6",
+    "sqlite-erd": "github:Edwinexd/sqlite-erd",
     "tailwindcss": "^3.4.4",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.15.0",
     "vite": "^7.1.10",

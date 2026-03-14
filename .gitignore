@@ -29,5 +29,14 @@ yarn-error.log*
 
 scripts/*
 !scripts/generate-screenshots.mjs
+!scripts/oracle-types.ts
+!scripts/encrypt-oracle.ts
+!scripts/generate-language.ts
+!scripts/extract-oracle.ts
+!scripts/generate-erd.ts
+!scripts/oracle.enc
+# Never commit the plaintext oracle (contains answer queries)
+scripts/oracle.json
 
 public/dist
+tsconfig.tsbuildinfo

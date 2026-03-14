@@ -22,6 +22,7 @@ import {
   getLocalData,
   buildMergedData,
 } from "./mergeUtils";
+import { useLanguage } from "./i18n/context";
 
 export interface ImportDialogHandle {
   open: (analysis: MergeAnalysis) => void;
@@ -77,18 +78,9 @@ function SqlBlock({ code, changedLines, variant }: { code: string; changedLines?
   );
 }
 
-function getConflictLabel(conflict: MergeConflict): string {
-  if (conflict.type === "view") {
-    return `View "${conflict.key}"`;
-  }
-  const question = getQuestion(Number(conflict.key));
-  return question
-    ? `Question ${question.category.display_number}${question.display_sequence}`
-    : `Question ${conflict.key}`;
-}
-
 const ImportDialog = forwardRef<ImportDialogHandle, ImportDialogProps>(
   ({ importedData, onOverwrite, onMergeApply }, ref) => {
+    const { t, lang, questions } = useLanguage();
     const [isOpen, setIsOpen] = useState(false);
     const [step, setStep] = useState<"choose" | "resolve">("choose");
     const [analysis, setAnalysis] = useState<MergeAnalysis | null>(null);
@@ -114,7 +106,7 @@ const ImportDialog = forwardRef<ImportDialogHandle, ImportDialogProps>(
     const handleMerge = () => {
       if (!importedData || !analysis) return;
       if (analysis.conflicts.length === 0) {
-        const local = getLocalData();
+        const local = getLocalData(lang);
         const merged = buildMergedData(local, importedData, analysis, {});
         onMergeApply(merged);
         setIsOpen(false);
@@ -125,10 +117,20 @@ const ImportDialog = forwardRef<ImportDialogHandle, ImportDialogProps>(
 
     const handleApplyMerge = () => {
       if (!importedData || !analysis) return;
-      const local = getLocalData();
+      const local = getLocalData(lang);
       const merged = buildMergedData(local, importedData, analysis, resolutions);
       onMergeApply(merged);
       setIsOpen(false);
+    };
+
+    const getConflictLabel = (conflict: MergeConflict): string => {
+      if (conflict.type === "view") {
+        return `${t("viewLabel")} "${conflict.key}"`;
+      }
+      const question = getQuestion(Number(conflict.key), questions);
+      return question
+        ? `${t("question")} ${question.category.display_number}${question.display_sequence}`
+        : `${t("question")} ${conflict.key}`;
     };
 
     const resolvedCount = analysis
@@ -154,25 +156,25 @@ const ImportDialog = forwardRef<ImportDialogHandle, ImportDialogProps>(
             {step === "choose" && (
               <>
                 <DialogHeader>
-                  <DialogTitle className="text-2xl">Import Save File</DialogTitle>
+                  <DialogTitle className="text-2xl">{t("importSaveFile")}</DialogTitle>
                   <DialogDescription>
-                    {addedCount > 0 && <>{addedCount} new, </>}
-                    {analysis.identicalCount > 0 && <>{analysis.identicalCount} identical, </>}
-                    {analysis.conflicts.length > 0 && <>{analysis.conflicts.length} conflicting, </>}
-                    How would you like to import?
+                    {addedCount > 0 && <>{addedCount} {t("newCount")}, </>}
+                    {analysis.identicalCount > 0 && <>{analysis.identicalCount} {t("identicalCount")}, </>}
+                    {analysis.conflicts.length > 0 && <>{analysis.conflicts.length} {t("conflictCount")}, </>}
+                    {t("howToImport")}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="flex gap-3 mt-2">
                   <Button onClick={handleOverwrite} variant="destructive">
-                    Overwrite All
+                    {t("overwriteAll")}
                   </Button>
-                  <Button onClick={handleMerge}>Merge</Button>
+                  <Button onClick={handleMerge}>{t("merge")}</Button>
                 </div>
                 <p className="text-sm text-muted-foreground mt-2">
-                  Overwrite replaces all current data with the imported file.
+                  {t("overwriteDescription")}
                   {analysis.conflicts.length > 0
-                    ? " Merge keeps your existing data and lets you resolve conflicts."
-                    : " Merge adds new entries while keeping your existing data."}
+                    ? ` ${t("mergeConflictDescription", { count: analysis.conflicts.length })}`
+                    : ` ${t("mergeAutoDescription")}`}
                 </p>
               </>
             )}
@@ -181,11 +183,11 @@ const ImportDialog = forwardRef<ImportDialogHandle, ImportDialogProps>(
               <>
                 <DialogHeader>
                   <DialogTitle className="text-2xl">
-                    Import - Resolve Conflicts
+                    {t("resolveConflicts")}
                   </DialogTitle>
                   <DialogDescription>
-                    {addedCount} added, {analysis.identicalCount} identical,{" "}
-                    {analysis.conflicts.length} conflicts
+                    {addedCount} {t("added")}, {analysis.identicalCount} {t("identicalCount")},{" "}
+                    {analysis.conflicts.length} {t("conflicts")}
                   </DialogDescription>
                 </DialogHeader>
 
@@ -212,7 +214,7 @@ const ImportDialog = forwardRef<ImportDialogHandle, ImportDialogProps>(
                         >
                           <div className="space-y-2">
                             <span className="text-sm font-medium text-muted-foreground block">
-                              Local
+                              {t("local")}
                             </span>
                             <SqlBlock
                               code={conflict.localValue}
@@ -225,13 +227,13 @@ const ImportDialog = forwardRef<ImportDialogHandle, ImportDialogProps>(
                                 htmlFor={`${resKey}-local`}
                                 className="cursor-pointer"
                               >
-                                Keep Local
+                                {t("keepLocal")}
                               </Label>
                             </div>
                           </div>
                           <div className="space-y-2">
                             <span className="text-sm font-medium text-muted-foreground block">
-                              Imported
+                              {t("imported")}
                             </span>
                             <SqlBlock
                               code={conflict.importedValue}
@@ -244,7 +246,7 @@ const ImportDialog = forwardRef<ImportDialogHandle, ImportDialogProps>(
                                 htmlFor={`${resKey}-imported`}
                                 className="cursor-pointer"
                               >
-                                Keep Imported
+                                {t("keepImported")}
                               </Label>
                             </div>
                           </div>
@@ -256,15 +258,14 @@ const ImportDialog = forwardRef<ImportDialogHandle, ImportDialogProps>(
 
                 <DialogFooter className="mt-4 sm:justify-between">
                   <Button variant="destructive" onClick={handleOverwrite}>
-                    Overwrite All
+                    {t("overwriteAll")}
                   </Button>
                   <div className="flex gap-2">
                     <Button variant="outline" onClick={() => setIsOpen(false)}>
-                      Cancel
+                      {t("cancel")}
                     </Button>
                     <Button onClick={handleApplyMerge} disabled={!allResolved}>
-                      Apply Merge ({resolvedCount}/{analysis.conflicts.length}{" "}
-                      resolved)
+                      {t("applyMerge", { resolved: resolvedCount, total: analysis.conflicts.length })}
                     </Button>
                   </div>
                 </DialogFooter>

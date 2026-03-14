@@ -4,6 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { getQuestion } from "./QuestionSelector";
+import { useLanguage } from "./i18n/context";
 
 interface ExportSelectorModalProps {
   correctQuestions: number[];
@@ -17,6 +18,7 @@ export interface ExportSelectorModalHandle {
 
 const ExportSelectorModal = forwardRef<ExportSelectorModalHandle, ExportSelectorModalProps>(
   ({ correctQuestions, onExport }, ref) => {
+    const { t, questions } = useLanguage();
     const [includeAll, setIncludeAll] = useState<boolean>(true);
     const [dontInclude, setDontInclude] = useState<number[]>([]);
     const [open, setOpen] = useState(false);
@@ -30,22 +32,22 @@ const ExportSelectorModal = forwardRef<ExportSelectorModalHandle, ExportSelector
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle className="text-2xl">Export Data</DialogTitle>
+            <DialogTitle className="text-2xl">{t("exportData")}</DialogTitle>
           </DialogHeader>
-          <p className="text-left text-base font-medium mb-4">Choose to export all questions or only selected questions to a save file.</p>
+          <p className="text-left text-base font-medium mb-4">{t("chooseExportText")}</p>
           <div className="flex items-center space-x-2 mb-4">
             <Checkbox
               id="include-all"
               checked={includeAll}
               onCheckedChange={(checked) => setIncludeAll(checked === true)}
             />
-            <Label htmlFor="include-all" className="text-base cursor-pointer">Include all questions</Label>
+            <Label htmlFor="include-all" className="text-base cursor-pointer">{t("includeAllQuestions")}</Label>
           </div>
           {!includeAll && correctQuestions.length > 0 &&
           <>
-            <p className="text-base font-medium mb-4">Only include ...</p>
+            <p className="text-base font-medium mb-4">{t("onlyInclude")}</p>
             <div className="grid grid-cols-4 gap-4">
-              {correctQuestions.map(questionId => getQuestion(questionId)!).sort((a, b) => a.display_sequence.localeCompare(b.display_sequence)).sort((a, b) => Number(a.category.display_number) - Number(b.category.display_number)).map(q => (
+              {correctQuestions.map(questionId => getQuestion(questionId, questions)!).filter(Boolean).sort((a, b) => a.display_sequence.localeCompare(b.display_sequence)).sort((a, b) => Number(a.category.display_number) - Number(b.category.display_number)).map(q => (
                 <div key={q.id} className="flex items-center space-x-2">
                   <Checkbox
                     id={`q-${q.id}`}
@@ -67,7 +69,7 @@ const ExportSelectorModal = forwardRef<ExportSelectorModalHandle, ExportSelector
           </>
           }
           {!includeAll && correctQuestions.length === 0 &&
-          <p className="text-base font-medium text-red-500">No questions are completed - nothing to export as correct to file (partial answers are always included).</p>
+          <p className="text-base font-medium text-red-500">{t("noQuestionsCompleted")}</p>
           }
           <div className="mt-3.5 flex gap-3">
             <Button
@@ -80,13 +82,13 @@ const ExportSelectorModal = forwardRef<ExportSelectorModalHandle, ExportSelector
                 setOpen(false);
               }}
             >
-              Export {includeAll ? "All" : "Selected"}
+              {includeAll ? t("exportAll") : t("exportSelected")}
             </Button>
             <Button
               variant="destructive"
               onClick={() => setOpen(false)}
             >
-              Abort
+              {t("abort")}
             </Button>
           </div>
         </DialogContent>

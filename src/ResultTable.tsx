@@ -1,5 +1,6 @@
 import React from "react";
 import { Result } from "./utils";
+import { useLanguage } from "./i18n/context";
 import {
   Table,
   TableBody,
@@ -16,6 +17,8 @@ interface ResultTableProps {
 }
 
 const ResultTable: React.FC<ResultTableProps> = ({ result, forceLight, forceFixedSizes }) => {
+  const { t } = useLanguage();
+
   const maybeRemoveDark = (className: string) => {
     if (forceLight) {
       return "";
@@ -40,7 +43,7 @@ const ResultTable: React.FC<ResultTableProps> = ({ result, forceLight, forceFixe
   let data = result.data;
 
   if (data.length === 0) {
-    return <div className="text-sm text-gray-500 dark:text-gray-400 italic">No results</div>;
+    return <div className="text-sm text-gray-500 dark:text-gray-400 italic">{t("noResults")}</div>;
   }
   let sliced = 0;
   if (data.length > 100) {
@@ -73,7 +76,7 @@ const ResultTable: React.FC<ResultTableProps> = ({ result, forceLight, forceFixe
                   key={i + "-" + j}
                   className={`${maybeFixedSizes("px-3 py-2")} border-b border-gray-200 ${maybeRemoveDark("dark:border-slate-700")} ${maybeFixedSizes("whitespace-normal")}`}
                 >
-                  {cell !== null ? <span>{cell}</span> : <span className="italic text-gray-400" title="NULL: No value">NULL</span>}
+                  {cell !== null ? <span>{cell}</span> : <span className="italic text-gray-400" title={t("nullTooltip")}>NULL</span>}
                 </TableCell>
               ))}
             </TableRow>
@@ -81,7 +84,7 @@ const ResultTable: React.FC<ResultTableProps> = ({ result, forceLight, forceFixe
         </TableBody>
       </Table>
       {sliced !== 0 && (
-        <p className="text-sm italic text-gray-500 dark:text-gray-400 mt-2">... and {sliced} more rows</p>
+        <p className="text-sm italic text-gray-500 dark:text-gray-400 mt-2">{t("moreRows", { count: sliced })}</p>
       )}
     </>
   );

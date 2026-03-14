@@ -43,7 +43,6 @@ import sha256 from "crypto-js/sha256";
 import { format as formatFns } from "date-fns";
 import { toPng } from "html-to-image";
 import PrivacyNoticeToggle from "./PrivacyNoticeToggle";
-import questions from "./questions.json";
 import ThemeToggle from "./ThemeToggle";
 import useTheme from "./useTheme";
 import { isCorrectResult, Result } from "./utils";
@@ -51,10 +50,12 @@ import DatabaseLayoutDialog from "./DatabaseLayoutDialog";
 import ExportSelectorModal, { ExportSelectorModalHandle } from "./ExportSelectorModal";
 import ImportDialog, { ImportDialogHandle } from "./ImportDialog";
 import { ParsedSaveData, parseImportFile, getLocalData, detectConflicts } from "./mergeUtils";
-
-const DEFAULT_QUERY = "SELECT * FROM student;";
+import { useLanguage, langKey, getUrlParam, setUrlParam } from "./i18n/context";
+import LanguageSelector from "./LanguageSelector";
+import { getQuestion } from "./QuestionSelector";
 
 function App() {
+  const { lang, t, questions, dbArrayBuffer, defaultQuery, isLoading } = useLanguage();
   const [question, setQuestion] = useState<Question>();
   const [database, setDatabase] = useState<initSqlJs.Database>();
   const [error, setError] = useState<string | null>(null);
@@ -83,9 +84,55 @@ function App() {
   const [pendingImportData, setPendingImportData] = useState<ParsedSaveData | null>(null);
 
   // QuestionSelector needs writtenQuestions and correctQuestions to be able to display the correct state
-  const [writtenQuestions, setWrittenQuestions] = useState<number[]>(localStorage.getItem("writtenQuestions") ? JSON.parse(localStorage.getItem("writtenQuestions")!) : []);
-  const [correctQuestions, setCorrectQuestions] = useState<number[]>(localStorage.getItem("correctQuestions") ? JSON.parse(localStorage.getItem("correctQuestions")!) : []);
-  
+  const [writtenQuestions, setWrittenQuestions] = useState<number[]>(
+    localStorage.getItem(langKey(lang, "writtenQuestions")) ? JSON.parse(localStorage.getItem(langKey(lang, "writtenQuestions"))!) : []
+  );
+  const [correctQuestions, setCorrectQuestions] = useState<number[]>(
+    localStorage.getItem(langKey(lang, "correctQuestions")) ? JSON.parse(localStorage.getItem(langKey(lang, "correctQuestions"))!) : []
+  );
+
+  // One-time migration: copy old unnamespaced keys to sv: prefix
+  useEffect(() => {
+    if (localStorage.getItem("i18n-migrated")) return;
+    const oldWritten = localStorage.getItem("writtenQuestions");
+    if (oldWritten && !localStorage.getItem(langKey("sv", "writtenQuestions"))) {
+      localStorage.setItem(langKey("sv", "writtenQuestions"), oldWritten);
+      const ids: number[] = JSON.parse(oldWritten);
+      for (const id of ids) {
+        const q = localStorage.getItem(`questionId-${id}`);
+        if (q) localStorage.setItem(langKey("sv", `questionId-${id}`), q);
+      }
+    }
+    const oldCorrect = localStorage.getItem("correctQuestions");
+    if (oldCorrect && !localStorage.getItem(langKey("sv", "correctQuestions"))) {
+      localStorage.setItem(langKey("sv", "correctQuestions"), oldCorrect);
+      const ids: number[] = JSON.parse(oldCorrect);
+      for (const id of ids) {
+        const q = localStorage.getItem(`correctQuestionId-${id}`);
+        if (q) localStorage.setItem(langKey("sv", `correctQuestionId-${id}`), q);
+      }
+    }
+    const oldViews = localStorage.getItem("views");
+    if (oldViews && !localStorage.getItem(langKey("sv", "views"))) {
+      localStorage.setItem(langKey("sv", "views"), oldViews);
+    }
+    localStorage.setItem("i18n-migrated", "1");
+  }, []);
+
+  // Reload written/correct questions when language changes
+  useEffect(() => {
+    setWrittenQuestions(
+      localStorage.getItem(langKey(lang, "writtenQuestions"))
+        ? JSON.parse(localStorage.getItem(langKey(lang, "writtenQuestions"))!)
+        : []
+    );
+    setCorrectQuestions(
+      localStorage.getItem(langKey(lang, "correctQuestions"))
+        ? JSON.parse(localStorage.getItem(langKey(lang, "correctQuestions"))!)
+        : []
+    );
+  }, [lang]);
+
   const resetResult = useCallback(() => {
     setResult(undefined);
     setIsCorrect(undefined);
@@ -95,47 +142,88 @@ function App() {
   }, []);
 
   const initDb = useCallback(async () => {
+    if (!dbArrayBuffer) return;
     resetResult();
-    const sqlPromise = initSqlJs(
-      {
-        locateFile: (file) => `/dist/sql.js/${file}`,
-      }
-    );
-    const dataPromise = fetch("/data.sqlite3").then((res) => res.arrayBuffer());
-    const [SQL, data] = await Promise.all([sqlPromise, dataPromise]);
-    const db = new SQL.Database(new Uint8Array(data));
+    const SQL = await initSqlJs({
+      locateFile: (file) => `/dist/sql.js/${file}`,
+    });
+    const db = new SQL.Database(new Uint8Array(dbArrayBuffer));
     db.create_function("YEAR", (date: string) => new Date(date).getFullYear());
     db.create_function("MONTH", (date: string) => new Date(date).getMonth() + 1);
     db.create_function("DAY", (date: string) => new Date(date).getDate());
     db.exec("PRAGMA foreign_keys = ON;");
     setDatabase(db);
-  }, [resetResult]);
+  }, [resetResult, dbArrayBuffer]);
 
   useEffect(() => {
     initDb();
   }, [initDb]);
 
+  // Reset state when language changes (skip initial mount)
+  const prevLangRef = useRef(lang);
+  useEffect(() => {
+    if (prevLangRef.current === lang) return;
+    prevLangRef.current = lang;
+    setQuestion(undefined);
+    setQuery(undefined);
+    setViews([]);
+    setDisplayViewsTable(false);
+    resetResult();
+    setUrlParam("q", null);
+  }, [lang, resetResult]);
+
+  // Restore question from URL param when questions become available
+  const urlRestoredRef = useRef(false);
+  useEffect(() => {
+    if (questions.length === 0 || urlRestoredRef.current) return;
+    urlRestoredRef.current = true;
+    const qParam = getUrlParam("q");
+    if (!qParam) return;
+    const match = qParam.match(/^(\d+)([A-Z]+)$/i);
+    if (match) {
+      const cat = questions.find(c => c.display_number === Number(match[1]));
+      const q = cat?.questions.find(q => q.display_sequence.toUpperCase() === match[2].toUpperCase());
+      if (q) {
+        const resolved = getQuestion(q.id, questions);
+        if (resolved) {
+          setQuestion(resolved);
+          setQuery(localStorage.getItem(langKey(lang, "questionId-" + resolved.id)) || defaultQuery);
+        }
+      }
+    }
+  }, [questions, lang, defaultQuery]);
+
+  // Sync selected question to URL
+  useEffect(() => {
+    if (question) {
+      setUrlParam("q", `${question.category.display_number}${question.display_sequence}`);
+    } else if (urlRestoredRef.current) {
+      // Only clear ?q= after initial restore, not during it
+      setUrlParam("q", null);
+    }
+  }, [question]);
+
   useEffect(() => {
     if (!database || !question || query === undefined) {
       return;
     }
-    let writtenQuestions = JSON.parse(localStorage.getItem("writtenQuestions") || "[]");
-    const initialLength = writtenQuestions.length;
-    if (query === DEFAULT_QUERY || query === "") {
-      localStorage.removeItem("questionId-" + question.id);
+    let wq = JSON.parse(localStorage.getItem(langKey(lang, "writtenQuestions")) || "[]");
+    const initialLength = wq.length;
+    if (query === defaultQuery || query === "") {
+      localStorage.removeItem(langKey(lang, "questionId-" + question.id));
       // remove from writtenQuestions if it exists there as well
-      const filtered = writtenQuestions.filter((id: number) => id !== question.id);
-      writtenQuestions = filtered;
+      const filtered = wq.filter((id: number) => id !== question.id);
+      wq = filtered;
     } else {
-      localStorage.setItem("questionId-" + question.id, query);
+      localStorage.setItem(langKey(lang, "questionId-" + question.id), query);
       // ensure that questionid is in localstorage writtenQuestions
-      if (!writtenQuestions.includes(question.id)) {
-        writtenQuestions.push(question.id);
+      if (!wq.includes(question.id)) {
+        wq.push(question.id);
       }
     }
-    if (writtenQuestions.length !== initialLength) {
-      localStorage.setItem("writtenQuestions", JSON.stringify(writtenQuestions));
-      setWrittenQuestions(writtenQuestions);
+    if (wq.length !== initialLength) {
+      localStorage.setItem(langKey(lang, "writtenQuestions"), JSON.stringify(wq));
+      setWrittenQuestions(wq);
     }
 
     try {
@@ -145,7 +233,7 @@ function App() {
         stmtCount++;
         stmt.free();
         if (stmtCount > 1) {
-          setError("Multiple statements detected. Please run only one query at a time.");
+          setError(t("multipleStatements"));
           return;
         }
       }
@@ -154,7 +242,7 @@ function App() {
       // @ts-expect-error - Error.message is a string
       setError(e.message);
     }
-  }, [database, query, question]);
+  }, [database, query, question, lang, defaultQuery, t]);
 
 
   const refreshViews = useCallback((upsert: boolean) => {
@@ -170,33 +258,36 @@ function App() {
     }
 
     if (fetchedViews.length - views.length !== 0) {
-      // Force display views table if the amount of views has changed
-      // TODO: We may just be able to return with this check, but unsure due import data handling.
       setDisplayViewsTable(true);
     }
 
-
     if (upsert) {
-      localStorage.setItem("views", JSON.stringify(fetchedViews));
+      localStorage.setItem(langKey(lang, "views"), JSON.stringify(fetchedViews));
     }
 
     setViews(fetchedViews);
 
-    // Recreate missing views
-    const storedViews = localStorage.getItem("views");
+    // Recreate missing views from localStorage
+    const storedViews = localStorage.getItem(langKey(lang, "views"));
     if (storedViews) {
       const savedViews: View[] = JSON.parse(storedViews);
       const missingViews = savedViews.filter(
         savedView => !fetchedViews.some(fetchedView => fetchedView.name === savedView.name)
       );
-      missingViews.forEach(view => {
-        database.exec(view.query);
-      });
-      if (missingViews.length > 0) {
-        refreshViews(false); // Refresh views again to update the state after recreating missing views
+      let recreated = 0;
+      for (const view of missingViews) {
+        try {
+          database.exec(view.query);
+          recreated++;
+        } catch (e) {
+          console.warn(`Failed to recreate view "${view.name}":`, (e as Error).message);
+        }
+      }
+      if (recreated > 0) {
+        refreshViews(false);
       }
     }
-  }, [database, views.length]);
+  }, [database, views.length, lang]);
 
   const runQuery = useCallback(() => {
     if (!database || query === undefined) {
@@ -247,7 +338,7 @@ function App() {
     }
     try {
       const viewQuery = `SELECT * FROM ${name}`;
-      const res = database.exec(viewQuery);    
+      const res = database.exec(viewQuery);
       setIsViewResult(true);
       setQueryedView(name);
       setEvaluatedQuery(viewQuery);
@@ -268,7 +359,7 @@ function App() {
       return;
     }
 
-    if (!window.confirm(`Are you sure you want to delete view ${name}?`)) {
+    if (!window.confirm(t("confirmDeleteView", { name }))) {
       return;
     }
 
@@ -278,7 +369,7 @@ function App() {
     if (isViewResult && queryedView === name) {
       resetResult();
     }
-  }, [database, isViewResult, queryedView, refreshViews, resetResult]);
+  }, [database, isViewResult, queryedView, refreshViews, resetResult, t]);
 
   useEffect(() => {
     refreshViews(false);
@@ -295,26 +386,26 @@ function App() {
     }
     setIsCorrect(true);
 
-    localStorage.setItem(`correctQuestionId-${question.id}`, query);
+    localStorage.setItem(langKey(lang, `correctQuestionId-${question.id}`), query);
     setCorrectQueryMismatch(false);
     setLoadedQuestionCorrect(true);
-    
-    const correctQuestions = JSON.parse(localStorage.getItem("correctQuestions") || "[]");
-    if (!correctQuestions.includes(question.id)) {
-      correctQuestions.push(question.id);
-      localStorage.setItem("correctQuestions", JSON.stringify(correctQuestions));
-      setCorrectQuestions(correctQuestions);
+
+    const cq = JSON.parse(localStorage.getItem(langKey(lang, "correctQuestions")) || "[]");
+    if (!cq.includes(question.id)) {
+      cq.push(question.id);
+      localStorage.setItem(langKey(lang, "correctQuestions"), JSON.stringify(cq));
+      setCorrectQuestions(cq);
     }
-  }, [result, question, query, evaluatedQuery, exportingStatus]);
+  }, [result, question, query, evaluatedQuery, exportingStatus, lang]);
 
   // Save query based on question
   const loadQuery = useCallback((_oldQuestion: Question | undefined, newQuestion: Question) => {
-    setQuery(localStorage.getItem("questionId-" + newQuestion.id) || DEFAULT_QUERY);
+    setQuery(localStorage.getItem(langKey(lang, "questionId-" + newQuestion.id)) || defaultQuery);
     // This prevents user from ctrl-z'ing to a different question
     if (editorRef.current) {
       editorRef.current!.session = {history: { stack: [], offset: 0 }};
     }
-  }, [setQuery]);
+  }, [setQuery, lang, defaultQuery]);
 
   // Update mismatch & loadedQuestionCorrect flags when query is changed
   useEffect(() => {
@@ -322,7 +413,7 @@ function App() {
       return;
     }
 
-    const correctQuery = localStorage.getItem(`correctQuestionId-${question.id}`);
+    const correctQuery = localStorage.getItem(langKey(lang, `correctQuestionId-${question.id}`));
     if (!correctQuery) {
       setCorrectQueryMismatch(false);
       setLoadedQuestionCorrect(false);
@@ -354,7 +445,7 @@ function App() {
       functionCase: "upper",
     });
     setCorrectQueryMismatch(currentQuery !== correctQueryFormatted);
-  }, [database, question, query]);
+  }, [database, question, query, lang]);
 
   const exportData = useCallback((options?: { include?: number[]}) => {
     if (!database) {
@@ -365,6 +456,7 @@ function App() {
     output += `-- This file was generated by SQL Validator at ${new Date().toISOString()}\n`;
     output += "-- Do not edit this file manually as it may lead to data corruption!\n";
     output += "-- If you wish to edit anything for your submission, do so in the application and export again.\n";
+    output += `-- Language: ${lang}\n`;
     output += "/* --- END Comments --- */\n";
 
     output += "/* --- BEGIN DO NOT EDIT --- */\n";
@@ -378,12 +470,12 @@ function App() {
     output += "/* --- BEGIN Validation --- */\n";
 
     output += "/* --- BEGIN Submission Summary --- */\n";
-    const writtenQueries = localStorage.getItem("correctQuestions") || "[]";
+    const writtenQueries = localStorage.getItem(langKey(lang, "correctQuestions")) || "[]";
     const parsed = JSON.parse(writtenQueries) as number[];
     const questionsString = parsed.filter((id) => options === undefined || (options.include && options.include.includes(id))).map((id) => {
       const category = questions.find(c => c.questions.some(q => q.id === id))!;
-      const question = category.questions.find(q => q.id === id)!;
-      return { formatted: `${category.display_number}${question.display_sequence}`, number: category.display_number, sequence: question.display_sequence };
+      const q = category.questions.find(q => q.id === id)!;
+      return { formatted: `${category.display_number}${q.display_sequence}`, number: category.display_number, sequence: q.display_sequence };
     }).sort((a, b) => a.sequence.localeCompare(b.sequence)).sort((a, b) => a.number - b.number).map(q => q.formatted).join(", ");
     output += `-- Written Questions: ${questionsString}\n`;
     output += "/* --- END Submission Summary --- */\n";
@@ -407,23 +499,23 @@ function App() {
     }
     output += "/* --- BEGIN Submission Queries --- */\n";
 
-    const queries = localStorage.getItem("correctQuestions");
-    if (queries) {
-      const parsed = JSON.parse(queries) as number[];
+    const queriesStr = localStorage.getItem(langKey(lang, "correctQuestions"));
+    if (queriesStr) {
+      const parsed = JSON.parse(queriesStr) as number[];
       const sorted = parsed.filter((id) => options === undefined || (options.include && options.include.includes(id))).map((id) => {
         const category = questions.find(c => c.questions.some(q => q.id === id))!;
-        const question = category.questions.find(q => q.id === id)!;
-        return { category, question };
-      }).map(({ category, question }) => { return { number: category.display_number, sequence: question.display_sequence, id: question.id };})
+        const q = category.questions.find(q => q.id === id)!;
+        return { category, question: q };
+      }).map(({ category, question: q }) => { return { number: category.display_number, sequence: q.display_sequence, id: q.id };})
         .sort((a, b) => a.sequence.localeCompare(b.sequence)).sort((a, b) => a.number - b.number).map(q => q.id);
       const questionQueries = sorted.map((id: number) => {
         const category = questions.find(c => c.questions.some(q => q.id === id))!;
-        const question = category.questions.find(q => q.id === id)!;
-        const activeQuery = localStorage.getItem("correctQuestionId-" + id);
+        const q = category.questions.find(q => q.id === id)!;
+        const activeQuery = localStorage.getItem(langKey(lang, "correctQuestionId-" + id));
         if (!activeQuery) {
           return "";
         }
-        let formatted = `/* --- BEGIN Question ${category.display_number}${question.display_sequence} (REFERENCE: ${question.id}) --- */\n`;
+        let formatted = `/* --- BEGIN Question ${category.display_number}${q.display_sequence} (REFERENCE: ${q.id}) --- */\n`;
         formatted += format(activeQuery + (activeQuery.endsWith(";") ? "" : ";"), {
           language: "sqlite",
           tabWidth: 2,
@@ -432,32 +524,32 @@ function App() {
           dataTypeCase: "upper",
           functionCase: "upper",
         });
-        formatted += `\n/* --- END Question ${category.display_number}${question.display_sequence} (REFERENCE: ${question.id}) --- */`;
+        formatted += `\n/* --- END Question ${category.display_number}${q.display_sequence} (REFERENCE: ${q.id}) --- */`;
         return formatted;
       }).join("\n");
       output += questionQueries;
       output += "\n";
     }
     output += "/* --- END Submission Queries --- */\n";
-    
+
     output += "/* --- BEGIN Save Summary --- */\n";
-    const existingQueries = localStorage.getItem("writtenQuestions") || "[]";
+    const existingQueries = localStorage.getItem(langKey(lang, "writtenQuestions")) || "[]";
     const existingParsed = JSON.parse(existingQueries) as number[];
     const existingQuestions = existingParsed.map((id) => {
       const category = questions.find(c => c.questions.some(q => q.id === id))!;
-      const question = category.questions.find(q => q.id === id)!;
-      return { formatted: `${category.display_number}${question.display_sequence}`, number: category.display_number, sequence: question.display_sequence };
+      const q = category.questions.find(q => q.id === id)!;
+      return { formatted: `${category.display_number}${q.display_sequence}`, number: category.display_number, sequence: q.display_sequence };
     }).sort((a, b) => a.sequence.localeCompare(b.sequence)).sort((a, b) => a.number - b.number).map(q => q.formatted).join(", ");
     output += `-- Written Questions: ${existingQuestions}\n`;
     output += "/* --- END Save Summary --- */\n";
     output += "/* --- BEGIN Raw Queries --- */\n";
     output += "/*\n";
-    const allQueries = localStorage.getItem("writtenQuestions");
+    const allQueries = localStorage.getItem(langKey(lang, "writtenQuestions"));
     if (allQueries) {
       const parsed = JSON.parse(allQueries);
       const queries: { [key: number]: string } = {};
       for (const id of parsed) {
-        const activeQuery = localStorage.getItem("questionId-" + id);
+        const activeQuery = localStorage.getItem(langKey(lang, "questionId-" + id));
         if (!activeQuery) {
           continue;
         }
@@ -469,12 +561,12 @@ function App() {
     output += "/* --- END Raw Queries --- */\n";
     output += "/* --- BEGIN Correct Raw Queries --- */\n";
     output += "/*\n";
-    const allCorrectQueries = localStorage.getItem("correctQuestions");
+    const allCorrectQueries = localStorage.getItem(langKey(lang, "correctQuestions"));
     if (allCorrectQueries) {
       const parsed = JSON.parse(allCorrectQueries);
       const queries: { [key: number]: string } = {};
       for (const id of parsed) {
-        const activeQuery = localStorage.getItem("correctQuestionId-" + id);
+        const activeQuery = localStorage.getItem(langKey(lang, "correctQuestionId-" + id));
         if (!activeQuery) {
           continue;
         }
@@ -485,9 +577,9 @@ function App() {
     output += "\n*/\n";
     output += "/* --- END Correct Raw Queries --- */\n";
     output += "/* --- BEGIN Raw List Dumps --- */\n";
-    output += "-- " + (localStorage.getItem("writtenQuestions") === null ? "[]" : localStorage.getItem("writtenQuestions")) + "\n";
-    output += "-- " + (localStorage.getItem("correctQuestions") === null ? "[]" : 
-      JSON.stringify((JSON.parse(localStorage.getItem("correctQuestions")!) as number[])
+    output += "-- " + (localStorage.getItem(langKey(lang, "writtenQuestions")) === null ? "[]" : localStorage.getItem(langKey(lang, "writtenQuestions"))) + "\n";
+    output += "-- " + (localStorage.getItem(langKey(lang, "correctQuestions")) === null ? "[]" :
+      JSON.stringify((JSON.parse(localStorage.getItem(langKey(lang, "correctQuestions"))!) as number[])
         .filter((id) => options === undefined || (options.include && options.include.includes(id))))
     ) + "\n";
     output += "/* --- END Raw List Dumps --- */\n";
@@ -504,38 +596,38 @@ function App() {
     const a = document.createElement("a");
     const formattedTimestamp = formatFns(new Date(), "yyyyMMdd_HHmm");
     a.href = url;
-    a.download = `validator_${formattedTimestamp}.sql`;;
+    a.download = `validator_${lang}_${formattedTimestamp}.sql`;;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
 
     URL.revokeObjectURL(url);
-  }, [database, views]);
+  }, [database, views, lang, questions]);
 
   const applyMergedData = useCallback((merged: ParsedSaveData) => {
     // Clear current data
-    const oldWritten: number[] = JSON.parse(localStorage.getItem("writtenQuestions") || "[]");
-    oldWritten.forEach(id => localStorage.removeItem(`questionId-${id}`));
-    const oldCorrect: number[] = JSON.parse(localStorage.getItem("correctQuestions") || "[]");
-    oldCorrect.forEach(id => localStorage.removeItem(`correctQuestionId-${id}`));
-    localStorage.removeItem("writtenQuestions");
-    localStorage.removeItem("correctQuestions");
+    const oldWritten: number[] = JSON.parse(localStorage.getItem(langKey(lang, "writtenQuestions")) || "[]");
+    oldWritten.forEach(id => localStorage.removeItem(langKey(lang, `questionId-${id}`)));
+    const oldCorrect: number[] = JSON.parse(localStorage.getItem(langKey(lang, "correctQuestions")) || "[]");
+    oldCorrect.forEach(id => localStorage.removeItem(langKey(lang, `correctQuestionId-${id}`)));
+    localStorage.removeItem(langKey(lang, "writtenQuestions"));
+    localStorage.removeItem(langKey(lang, "correctQuestions"));
 
     // Write merged data
     for (const [key, value] of Object.entries(merged.rawQueries)) {
-      localStorage.setItem(`questionId-${key}`, value);
+      localStorage.setItem(langKey(lang, `questionId-${key}`), value);
       if (question !== undefined && Number(key) === question.id) {
         setQuery(value);
       }
     }
     for (const [key, value] of Object.entries(merged.correctQueries)) {
-      localStorage.setItem(`correctQuestionId-${key}`, value);
+      localStorage.setItem(langKey(lang, `correctQuestionId-${key}`), value);
     }
 
     setWrittenQuestions(merged.writtenQuestionIds);
     setCorrectQuestions(merged.correctQuestionIds);
-    localStorage.setItem("writtenQuestions", JSON.stringify(merged.writtenQuestionIds));
-    localStorage.setItem("correctQuestions", JSON.stringify(merged.correctQuestionIds));
+    localStorage.setItem(langKey(lang, "writtenQuestions"), JSON.stringify(merged.writtenQuestionIds));
+    localStorage.setItem(langKey(lang, "correctQuestions"), JSON.stringify(merged.correctQuestionIds));
 
     // Update views in database
     for (const view of views) {
@@ -545,7 +637,7 @@ function App() {
       database!.exec(view.query);
     }
     refreshViews(true);
-  }, [database, question, refreshViews, views]);
+  }, [database, question, refreshViews, views, lang]);
 
   const importData = useCallback(() => {
     const input = document.createElement("input");
@@ -568,14 +660,14 @@ function App() {
         }
         const parsed = parseImportFile(data);
         setPendingImportData(parsed);
-        const local = getLocalData();
+        const local = getLocalData(lang);
         const analysis = detectConflicts(local, parsed);
         importDialogRef.current?.open(analysis);
       };
       reader.readAsText(file);
     };
     input.click();
-  }, []);
+  }, [lang]);
 
   // Overriding default behavior for ctrl+s to call exportData instead
   useEffect(() => {
@@ -596,14 +688,14 @@ function App() {
       return;
     }
 
-    const toExportQuery = localStorage.getItem(`correctQuestionId-${question.id}`);
+    const toExportQuery = localStorage.getItem(langKey(lang, `correctQuestionId-${question.id}`));
     if (!toExportQuery) {
       return;
     }
 
     setExportQuery(toExportQuery);
     setExportQuestion(question);
-  }, [exportView, loadedQuestionCorrect, question]);
+  }, [exportView, loadedQuestionCorrect, question, lang]);
 
   const exportImageView = useCallback((name: string) => {
     if (!database || exportQuery) {
@@ -621,11 +713,9 @@ function App() {
       return;
     }
 
-    // TODO: I'm not really a fan of this solution but without it the browser crashes due to downloading an extreme amount of files
     setExportingStatus(1);
 
     const triggerDownload = (dataUrl: string, filename: string) => {
-      // Convert data URL to Blob for better browser compatibility
       const byteString = atob(dataUrl.split(",")[1]);
       const mimeType = dataUrl.split(",")[0].split(":")[1].split(";")[0];
       const ab = new ArrayBuffer(byteString.length);
@@ -643,7 +733,6 @@ function App() {
       document.body.appendChild(link);
       link.click();
 
-      // Cleanup
       setTimeout(() => {
         document.body.removeChild(link);
         URL.revokeObjectURL(blobUrl);
@@ -686,26 +775,40 @@ function App() {
     });
   }, [evaluatedQuery, exportQuery, exportRendererRef, getTheme, isDarkMode, exportingStatus, question, resetResult, setTheme, exportQuestion, exportView]);
 
+  if (isLoading) {
+    return (
+      <div className="App">
+        <header className="App-header">
+          <h1 className="text-6xl font-semibold my-3">SQL Validator</h1>
+          <p className="text-base text-gray-500">Loading...</p>
+        </header>
+      </div>
+    );
+  }
+
   return (
     <div className="App">
       {exportQuestion && exportQuery && <ExportRenderer query={{isCorrect: isCorrectResult(exportQuestion.evaluable_result, evalSql(exportQuery)), question: exportQuestion, code: exportQuery, result: evalSql(exportQuery)}} ref={exportRendererRef} />}
       {exportView && <ExportRenderer view={{view: exportView, result: evalSql(`SELECT * FROM ${exportView.name}`)}} ref={exportRendererRef} />}
       <header className="App-header">
         <div className="my-2"></div>
-        <ThemeToggle setTheme={setTheme} isDarkMode={isDarkMode}></ThemeToggle>
+        <div className="flex items-center gap-3">
+          <LanguageSelector />
+          <ThemeToggle setTheme={setTheme} isDarkMode={isDarkMode}></ThemeToggle>
+        </div>
         <h1 className="text-6xl font-semibold my-3">SQL Validator</h1>
         <DatabaseLayoutDialog isDarkMode={isDarkMode} />
-        <QuestionSelector writtenQuestions={writtenQuestions} correctQuestions={correctQuestions} onSelect={(selectedQuestion) => {loadQuery(question, selectedQuestion); resetResult(); setQuestion(selectedQuestion);}}></QuestionSelector>
-        {question && <h2 className="text-2xl font-bold mt-4 mb-2">Fråga {question.category.display_number}{question.display_sequence}</h2>}
-        <p className="break-words max-w-4xl mb-4 text-left text-base p-2">{question?.description || "Select a question to get started!"}</p>
+        <QuestionSelector writtenQuestions={writtenQuestions} correctQuestions={correctQuestions} activeQuestion={question} onSelect={(selectedQuestion) => {loadQuery(question, selectedQuestion); resetResult(); setQuestion(selectedQuestion);}}></QuestionSelector>
+        {question && <h2 className="text-2xl font-bold mt-4 mb-2">{t("question")} {question.category.display_number}{question.display_sequence}</h2>}
+        <p className="break-words max-w-4xl mb-4 text-left text-base p-2">{question?.description || t("selectQuestion")}</p>
 
         {/* Query Section with Header */}
         <div className="w-full max-w-4xl">
           <div className="flex justify-between items-center mb-2 px-1">
-            <span className="font-semibold text-base">Query</span>
+            <span className="font-semibold text-base">{t("query")}</span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Actions menu">
+                <Button variant="ghost" size="icon" aria-label={t("actionsMenu")}>
                   <Settings className="w-5 h-5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -714,13 +817,13 @@ function App() {
                   onClick={() => exportImageQuery()}
                   disabled={!loadedQuestionCorrect}
                 >
-                  Export PNG
+                  {t("exportPng")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => importData()}>
-                  Import Data
+                  {t("importData")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => exportModalRef.current?.openDialog()}>
-                  Export Data
+                  {t("exportData")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -729,7 +832,7 @@ function App() {
             <Editor
               id="placeholder-editor"
               itemID="placeholder-editor"
-              value={"-- Select a question to get started!"}
+              value={t("selectQuestionComment")}
               disabled={true}
               onValueChange={_code => null}
               highlight={code => highlight(code, languages.sql)}
@@ -766,10 +869,10 @@ function App() {
             {correctQueryMismatch && (
               <div className="flex items-start gap-2 text-yellow-600 dark:text-yellow-400">
                 <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                <span className="text-sm">Query mismatch - current query differs from your saved correct answer</span>
+                <span className="text-sm">{t("queryMismatch")}</span>
               </div>
             )}
-            <a href="https://github.com/Edwinexd/db-sqlite-tools/releases/latest/download/DB_SQLite_Implementation_Tools.pdf" target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">SQLite Datatypes & Date Handling Reference (Ch. 3)</a>
+            <a href="https://github.com/Edwinexd/db-sqlite-tools/releases/latest/download/DB_SQLite_Implementation_Tools.pdf" target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t("sqlReference")}</a>
           </div>
 
           {/* Right side - Buttons */}
@@ -779,11 +882,11 @@ function App() {
                 variant="outline"
                 onClick={() => {
                   if (!question) return;
-                  setQuery(localStorage.getItem(`correctQuestionId-${question.id}`) || DEFAULT_QUERY);
+                  setQuery(localStorage.getItem(langKey(lang, `correctQuestionId-${question.id}`)) || defaultQuery);
                 }}
                 className="border-yellow-500 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20"
               >
-                Load Saved
+                {t("loadSaved")}
               </Button>
             )}
             <Button
@@ -801,14 +904,14 @@ function App() {
               }}
               disabled={!(error === null) || query === undefined}
             >
-              Format Code
+              {t("formatCode")}
             </Button>
             <Button
               onClick={runQuery}
               disabled={!(error === null) || query === undefined}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              Run Query
+              {t("runQuery")}
             </Button>
           </div>
         </div>
@@ -830,37 +933,37 @@ function App() {
             {isCorrect ? (
               <div className="flex items-center gap-2 mt-4 text-green-600 dark:text-green-400">
                 <CheckCircle2 className="w-6 h-6" />
-                <span className="font-semibold text-base">Matching Result!</span>
+                <span className="font-semibold text-base">{t("matchingResult")}</span>
               </div>
             ) : isCorrect === undefined ? null : (
               <div className="flex items-center gap-2 mt-4 text-red-600 dark:text-red-400">
                 <XCircle className="w-6 h-6" />
-                <span className="font-semibold text-base">Wrong result!</span>
+                <span className="font-semibold text-base">{t("wrongResult")}</span>
               </div>
             )}
             {isCorrect && (
               <p className="text-sm max-w-4xl mb-2 text-left italic text-gray-600 dark:text-gray-400">
-                ... but it may not be correct! Make sure that all joins are complete and that the query only uses information from the assignment before exporting.
+                {t("correctButVerify")}
               </p>
             )}
             {/* Two different result tables next to each other, actual and expected */}
             <div className="flex flex-wrap max-w-full py-4 justify-center gap-4">
               <div className="flex-initial overflow-x-auto">
-                <h3 className="text-lg font-bold py-2">Actual</h3>
+                <h3 className="text-lg font-bold py-2">{t("actual")}</h3>
                 <div className="overflow-x-auto max-w-full">
                   <ResultTable result={result} />
                 </div>
               </div>
               <div className="flex-initial overflow-x-auto">
-                <h3 className="text-lg font-bold py-2">Expected</h3>
+                <h3 className="text-lg font-bold py-2">{t("expected")}</h3>
                 <div className="overflow-x-auto max-w-full">
                   <ResultTable result={question.evaluable_result} />
                 </div>
               </div>
             </div>
           </> : <>
-            <h2 className="text-xl font-bold mt-4">View {queryedView}</h2>
-            <p className="text-sm max-w-4xl mb-2 text-left italic text-gray-600 dark:text-gray-400">This is the query for view {queryedView}.</p>
+            <h2 className="text-xl font-bold mt-4">{t("viewLabel")} {queryedView}</h2>
+            <p className="text-sm max-w-4xl mb-2 text-left italic text-gray-600 dark:text-gray-400">{t("viewQueryLabel", { name: queryedView || "" })}</p>
             <Editor
               readOnly={true}
               value={format(
@@ -878,7 +981,7 @@ function App() {
               tabSize={4}
               className="font-mono text-base w-full dark:bg-slate-800 bg-slate-100 max-w-4xl min-h-32 rounded-md my-2"
             />
-            <p className="text-sm max-w-4xl mb-2 text-left italic text-gray-600 dark:text-gray-400">... and this is the result of querying it with SELECT * FROM {queryedView};</p>
+            <p className="text-sm max-w-4xl mb-2 text-left italic text-gray-600 dark:text-gray-400">{t("viewResultLabel", { name: queryedView || "" })}</p>
             <div className="overflow-x-auto max-w-full">
               <ResultTable result={result} />
             </div>
@@ -898,7 +1001,7 @@ function App() {
             className="flex items-center gap-2 text-base font-semibold hover:text-blue-600 dark:hover:text-blue-400 px-0"
           >
             {showViewsTable ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-            <span>Views</span>
+            <span>{t("views")}</span>
             <span className="text-sm font-normal text-gray-500">({views.length})</span>
           </Button>
           {showViewsTable && views.length > 0 && (

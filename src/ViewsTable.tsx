@@ -3,6 +3,7 @@ import "prismjs/themes/prism.css";
 import React from "react";
 import { Upload, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "./i18n/context";
 
 export interface View {
   name: string;
@@ -19,6 +20,8 @@ interface ViewsTableProps {
 }
 
 const ViewsTable: React.FC<ViewsTableProps> = ({ views, currentlyQuriedView, onRemoveView, onViewRequest, onViewHideRequest, onViewExportRequest }) => {
+  const { t } = useLanguage();
+
   return (
     <div className="w-full">
       {views.map((view) => (
@@ -49,7 +52,7 @@ const ViewsTable: React.FC<ViewsTableProps> = ({ views, currentlyQuriedView, onR
               className="text-sm text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400"
             >
               <Upload className="h-4 w-4 mr-1" />
-              Export PNG
+              {t("exportPng")}
             </Button>
             <Button
               variant="ghost"
@@ -57,7 +60,7 @@ const ViewsTable: React.FC<ViewsTableProps> = ({ views, currentlyQuriedView, onR
               className="text-sm text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400"
             >
               <Trash2 className="h-4 w-4 mr-1" />
-              Delete
+              {t("deleteView")}
             </Button>
           </div>
         </div>

@@ -73,27 +73,28 @@ export function parseImportFile(data: string): ParsedSaveData {
   return { rawQueries, correctQueries, writtenQuestionIds, correctQuestionIds, views };
 }
 
-export function getLocalData(): ParsedSaveData {
+export function getLocalData(langPrefix?: string): ParsedSaveData {
+  const pfx = langPrefix ? `${langPrefix}:` : "";
   const writtenQuestionIds: number[] = JSON.parse(
-    localStorage.getItem("writtenQuestions") || "[]"
+    localStorage.getItem(`${pfx}writtenQuestions`) || "[]"
   );
   const correctQuestionIds: number[] = JSON.parse(
-    localStorage.getItem("correctQuestions") || "[]"
+    localStorage.getItem(`${pfx}correctQuestions`) || "[]"
   );
 
   const rawQueries: Record<string, string> = {};
   for (const id of writtenQuestionIds) {
-    const q = localStorage.getItem(`questionId-${id}`);
+    const q = localStorage.getItem(`${pfx}questionId-${id}`);
     if (q) rawQueries[String(id)] = q;
   }
 
   const correctQueries: Record<string, string> = {};
   for (const id of correctQuestionIds) {
-    const q = localStorage.getItem(`correctQuestionId-${id}`);
+    const q = localStorage.getItem(`${pfx}correctQuestionId-${id}`);
     if (q) correctQueries[String(id)] = q;
   }
 
-  const views: View[] = JSON.parse(localStorage.getItem("views") || "[]");
+  const views: View[] = JSON.parse(localStorage.getItem(`${pfx}views`) || "[]");
 
   return { rawQueries, correctQueries, writtenQuestionIds, correctQuestionIds, views };
 }
