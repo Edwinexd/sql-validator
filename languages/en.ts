@@ -226,6 +226,8 @@ const en: LanguageDefinition = {
     },
   },
 
+  aggregateLabel: "count",
+
   // ── Questions ────────────────────────────────────────────────
   questionDescriptions: {
     1: "Retrieve person_id, name, address, and postal_code for people living in York!",

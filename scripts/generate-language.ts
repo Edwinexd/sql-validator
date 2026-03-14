@@ -182,7 +182,7 @@ function resolveQuery(template: string, lang: LanguageDefinition): string {
         return (tableColumns as Record<string, string>)[col];
       }
       case "alias":
-        return ref; // aliases stay as-is (they're part of the query, not schema)
+        return ref;
       case "city":
         return lang.cities[Number(ref)];
       case "courseCode": {
@@ -256,7 +256,11 @@ async function main() {
     const resolvedQuery = resolveQuery(queryTemplate, lang);
     const res = db.exec(resolvedQuery);
     if (res.length > 0) {
-      return { columns: res[0].columns, values: res[0].values as (string | number | null)[][] };
+      // Replace expression column names (e.g. "COUNT(student)") with the language's aggregate label
+      const columns = res[0].columns.map(col =>
+        /[()]/.test(col) ? lang.aggregateLabel : col
+      );
+      return { columns, values: res[0].values as (string | number | null)[][] };
     }
     return { columns: [], values: [] };
   }

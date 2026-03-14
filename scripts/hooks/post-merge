@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Post-merge hook (runs after git pull): decrypts oracle.enc → oracle.json.
+# Only runs if oracle.enc was changed in the merge.
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+ENV_FILE="$REPO_ROOT/.env"
+ORACLE_ENC="$REPO_ROOT/data/oracle.enc"
+
+# Check if oracle.enc was part of the merge
+CHANGED_FILES=$(git diff-tree -r --name-only --no-commit-id ORIG_HEAD HEAD 2>/dev/null || true)
+if ! echo "$CHANGED_FILES" | grep -q "data/oracle.enc"; then
+  exit 0
+fi
+
+# Load password from .env
+if [ ! -f "$ENV_FILE" ]; then
+  echo "Warning: .env file not found, skipping oracle decryption."
+  echo "Create .env with ORACLE_PASSWORD=<password> to auto-decrypt on pull."
+  exit 0
+fi
+
+source "$ENV_FILE"
+
+if [ -z "$ORACLE_PASSWORD" ]; then
+  echo "Warning: ORACLE_PASSWORD not set in .env, skipping oracle decryption."
+  exit 0
+fi
+
+echo "Decrypting oracle.enc → oracle.json..."
+npx tsx "$REPO_ROOT/scripts/decrypt-oracle.ts" "$ORACLE_PASSWORD"

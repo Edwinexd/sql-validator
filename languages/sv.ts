@@ -226,8 +226,7 @@ const sv: LanguageDefinition = {
     },
   },
 
-  // ── Default query ────────────────────────────────────────────
-
+  aggregateLabel: "antal",
 
   // ── Questions ────────────────────────────────────────────────
   questionDescriptions: {

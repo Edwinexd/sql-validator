@@ -45,7 +45,9 @@
     "copy-sqljs": "copyfiles -f node_modules/sql.js/dist/sql-wasm.wasm public/dist/sql.js/",
     "start-vite": "vite",
     "build-vite": "tsc -b && vite build",
+    "prepare": "git config core.hooksPath scripts/hooks",
     "generate-lang": "tsx scripts/generate-language.ts",
+    "decrypt-oracle": "tsx scripts/decrypt-oracle.ts",
     "encrypt-oracle": "tsx scripts/encrypt-oracle.ts",
     "generate-erd": "tsx scripts/generate-erd.ts",
     "generate-all": "tsx scripts/generate-language.ts --lang sv --plain && tsx scripts/generate-erd.ts --db public/languages/sv/data.sqlite3 --out public/languages/sv && tsx scripts/generate-language.ts --lang en --plain && tsx scripts/generate-erd.ts --db public/languages/en/data.sqlite3 --out public/languages/en"

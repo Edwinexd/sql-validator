@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Pre-commit hook: encrypts oracle.json → oracle.enc and stages it.
+# Only runs if oracle.json has been modified.
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+ENV_FILE="$REPO_ROOT/.env"
+ORACLE_JSON="$REPO_ROOT/data/oracle.json"
+ORACLE_ENC="$REPO_ROOT/data/oracle.enc"
+
+# Skip if oracle.json doesn't exist (nothing to encrypt)
+if [ ! -f "$ORACLE_JSON" ]; then
+  exit 0
+fi
+
+# Check if oracle.json is newer than oracle.enc
+if [ -f "$ORACLE_ENC" ] && [ "$ORACLE_ENC" -nt "$ORACLE_JSON" ]; then
+  exit 0
+fi
+
+# Load password from .env
+if [ ! -f "$ENV_FILE" ]; then
+  echo "Error: .env file not found. Create it with ORACLE_PASSWORD=<password>"
+  echo "See .env.example for the expected format."
+  exit 1
+fi
+
+source "$ENV_FILE"
+
+if [ -z "$ORACLE_PASSWORD" ]; then
+  echo "Error: ORACLE_PASSWORD not set in .env"
+  exit 1
+fi
+
+echo "Encrypting oracle.json → oracle.enc..."
+npx tsx "$REPO_ROOT/scripts/encrypt-oracle.ts" "$ORACLE_PASSWORD"
+git add "$ORACLE_ENC"
