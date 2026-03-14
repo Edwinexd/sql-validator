@@ -55,7 +55,7 @@ import LanguageSelector from "./LanguageSelector";
 import { getQuestion } from "./QuestionSelector";
 
 function App() {
-  const { lang, t, questions, dbArrayBuffer, defaultQuery, isLoading } = useLanguage();
+  const { lang, t, questions, dbArrayBuffer, defaultQuery } = useLanguage();
   const [question, setQuestion] = useState<Question>();
   const [database, setDatabase] = useState<initSqlJs.Database>();
   const [error, setError] = useState<string | null>(null);
@@ -205,8 +205,18 @@ function App() {
     }
   }, [question]);
 
+  // Track which language the current question was loaded in
+  const questionLangRef = useRef(lang);
+  useEffect(() => {
+    if (question) questionLangRef.current = lang;
+  }, [question, lang]);
+
   useEffect(() => {
     if (!database || !question || query === undefined) {
+      return;
+    }
+    // Don't write to localStorage if lang changed but question hasn't been cleared yet
+    if (questionLangRef.current !== lang) {
       return;
     }
     let wq = JSON.parse(localStorage.getItem(langKey(lang, "writtenQuestions")) || "[]");
@@ -380,6 +390,9 @@ function App() {
 
   useEffect(() => {
     if (!result || !question || evaluatedQuery !== query) {
+      return;
+    }
+    if (questionLangRef.current !== lang) {
       return;
     }
     const matchesPrimary = isCorrectResult(question.evaluable_result, result);
@@ -780,17 +793,6 @@ function App() {
       setExportingStatus(0);
     });
   }, [evaluatedQuery, exportQuery, exportRendererRef, getTheme, isDarkMode, exportingStatus, question, resetResult, setTheme, exportQuestion, exportView]);
-
-  if (isLoading) {
-    return (
-      <div className="App">
-        <header className="App-header">
-          <h1 className="text-6xl font-semibold my-3">SQL Validator</h1>
-          <p className="text-base text-gray-500">Loading...</p>
-        </header>
-      </div>
-    );
-  }
 
   return (
     <div className="App">

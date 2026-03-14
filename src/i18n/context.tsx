@@ -33,8 +33,6 @@ interface LanguageContextValue {
   dbArrayBuffer: ArrayBuffer | null;
   /** Default query for the current language */
   defaultQuery: string;
-  /** Whether language data is currently loading */
-  isLoading: boolean;
 }
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
@@ -78,10 +76,8 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [questions, setQuestions] = useState<QuestionCategory[]>([]);
   const [dbArrayBuffer, setDbArrayBuffer] = useState<ArrayBuffer | null>(null);
   const [defaultQuery, setDefaultQuery] = useState("SELECT * FROM Student;");
-  const [isLoading, setIsLoading] = useState(true);
 
   const loadLanguageData = useCallback(async (langCode: string) => {
-    setIsLoading(true);
     try {
       const [qpResponse, dbResponse] = await Promise.all([
         fetch(`/languages/${langCode}/questionpool.json`),
@@ -101,8 +97,6 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setDbArrayBuffer(dbData);
     } catch (e) {
       console.error("Failed to load language data:", e);
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 
@@ -131,7 +125,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [lang]);
 
   return (
-    <LanguageContext.Provider value={{ lang, setLang, t, questions, dbArrayBuffer, defaultQuery, isLoading }}>
+    <LanguageContext.Provider value={{ lang, setLang, t, questions, dbArrayBuffer, defaultQuery }}>
       {children}
     </LanguageContext.Provider>
   );
