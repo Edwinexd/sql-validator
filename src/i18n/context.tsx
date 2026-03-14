@@ -13,6 +13,10 @@ export interface QuestionCategory {
       columns: string[];
       values: (string | number | null)[][];
     };
+    alternative_results?: Array<{
+      columns: string[];
+      values: (string | number | null)[][];
+    }>;
   }>;
 }
 

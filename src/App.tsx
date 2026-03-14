@@ -69,6 +69,7 @@ function App() {
   const [queryedView, setQueryedView] = useState<string | null>(null);
   const [views, setViews] = useState<View[]>([]);
   const [isCorrect, setIsCorrect] = useState<boolean>();
+  const [matchedResult, setMatchedResult] = useState<Result>();
   const { getTheme, setTheme, isDarkMode } = useTheme();
   // Exporting functionality / flags
   const [exportView, setExportView] = useState<View>();
@@ -136,6 +137,7 @@ function App() {
   const resetResult = useCallback(() => {
     setResult(undefined);
     setIsCorrect(undefined);
+    setMatchedResult(undefined);
     setEvaluatedQuery(null);
     setIsViewResult(false);
     setQueryedView(null);
@@ -380,11 +382,15 @@ function App() {
     if (!result || !question || evaluatedQuery !== query) {
       return;
     }
-    if (!isCorrectResult(question.evaluable_result, result)) {
+    const matchesPrimary = isCorrectResult(question.evaluable_result, result);
+    const matchedAlt = !matchesPrimary ? question.alternative_evaluable_results?.find(alt => isCorrectResult(alt, result)) : undefined;
+    if (!matchesPrimary && !matchedAlt) {
       setIsCorrect(false);
+      setMatchedResult(undefined);
       return;
     }
     setIsCorrect(true);
+    setMatchedResult(matchedAlt ?? question.evaluable_result);
 
     localStorage.setItem(langKey(lang, `correctQuestionId-${question.id}`), query);
     setCorrectQueryMismatch(false);
@@ -788,7 +794,7 @@ function App() {
 
   return (
     <div className="App">
-      {exportQuestion && exportQuery && <ExportRenderer query={{isCorrect: isCorrectResult(exportQuestion.evaluable_result, evalSql(exportQuery)), question: exportQuestion, code: exportQuery, result: evalSql(exportQuery)}} ref={exportRendererRef} />}
+      {exportQuestion && exportQuery && <ExportRenderer query={{isCorrect: isCorrectResult(exportQuestion.evaluable_result, evalSql(exportQuery)) || (exportQuestion.alternative_evaluable_results?.some(alt => isCorrectResult(alt, evalSql(exportQuery))) ?? false), question: exportQuestion, code: exportQuery, result: evalSql(exportQuery)}} ref={exportRendererRef} />}
       {exportView && <ExportRenderer view={{view: exportView, result: evalSql(`SELECT * FROM ${exportView.name}`)}} ref={exportRendererRef} />}
       <header className="App-header">
         <div className="my-2"></div>
@@ -957,7 +963,7 @@ function App() {
               <div className="flex-initial overflow-x-auto">
                 <h3 className="text-lg font-bold py-2">{t("expected")}</h3>
                 <div className="overflow-x-auto max-w-full">
-                  <ResultTable result={question.evaluable_result} />
+                  <ResultTable result={matchedResult ?? question.evaluable_result} />
                 </div>
               </div>
             </div>

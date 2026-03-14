@@ -3,7 +3,7 @@
  *
  * Usage: npx tsx scripts/extract-oracle.ts
  *
- * Output: scripts/oracle.json
+ * Output: data/oracle.json
  */
 
 import * as fs from "fs";
@@ -17,7 +17,7 @@ import type {
   OracleParticipation,
   OracleQuestion,
   OracleData,
-} from "./oracle-types";
+} from "../data/oracle-types";
 
 // ---------------------------------------------------------------------------
 // 1. Persons (21 slots, in DB insertion order)
@@ -360,7 +360,7 @@ const oracle: OracleData = {
   questions,
 };
 
-const outPath = path.resolve(__dirname, "oracle.json");
+const outPath = path.resolve(__dirname, "..", "data", "oracle.json");
 fs.writeFileSync(outPath, JSON.stringify(oracle, null, 2) + "\n");
 
 console.log(`Wrote ${outPath}`);

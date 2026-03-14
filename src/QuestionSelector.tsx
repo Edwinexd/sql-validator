@@ -24,6 +24,7 @@ export interface Question {
     values: (string | number | null)[][];
   };
   evaluable_result: Result;
+  alternative_evaluable_results?: Result[];
 }
 
 interface QuestionSelectorProps {
@@ -106,7 +107,12 @@ export const getQuestion = (id: number, questions: QuestionCategory[]): Question
   for (const category of questions) {
     const question = category.questions.find(q => q.id === id);
     if (question) {
-      return { ...question, category: { id: category.category_id, display_number: String(category.display_number) }, evaluable_result: { columns: question.result.columns, data: question.result.values } };
+      return {
+        ...question,
+        category: { id: category.category_id, display_number: String(category.display_number) },
+        evaluable_result: { columns: question.result.columns, data: question.result.values },
+        alternative_evaluable_results: question.alternative_results?.map(r => ({ columns: r.columns, data: r.values })),
+      };
     }
   }
   return undefined;
@@ -155,7 +161,12 @@ const QuestionSelector: React.FC<QuestionSelectorProps> = ({ onSelect, writtenQu
       return;
     }
 
-    const questionObj = {...rawQuestionObj, category: { id: category, display_number: String(category) }, evaluable_result: { columns: rawQuestionObj.result.columns, data: rawQuestionObj.result.values } };
+    const questionObj = {
+      ...rawQuestionObj,
+      category: { id: category, display_number: String(category) },
+      evaluable_result: { columns: rawQuestionObj.result.columns, data: rawQuestionObj.result.values },
+      alternative_evaluable_results: rawQuestionObj.alternative_results?.map(r => ({ columns: r.columns, data: r.values })),
+    };
     setQuestion(questionObj);
     onSelect(questionObj);
   }, [sequence, category, question, onSelect, writtenQuestions, correctQuestions, questions]);

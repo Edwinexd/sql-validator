@@ -87,6 +87,13 @@ export interface OracleQuestion {
    * - {{personId:N}} -> person ID at slot N
    */
   query: string;
+  /**
+   * Alternative reference queries that are also considered correct.
+   * Uses the same placeholder format as `query`.
+   * The primary `query` result is shown as the expected answer;
+   * these alternatives are only used for validation.
+   */
+  alternativeQueries?: string[];
 }
 
 export interface OracleData {

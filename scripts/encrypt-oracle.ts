@@ -13,8 +13,8 @@ if (!password) {
   process.exit(1);
 }
 
-const oraclePath = join(__dirname, "oracle.json");
-const encPath = join(__dirname, "oracle.enc");
+const oraclePath = join(__dirname, "..", "data", "oracle.json");
+const encPath = join(__dirname, "..", "data", "oracle.enc");
 
 const plaintext = readFileSync(oraclePath, "utf-8");
 

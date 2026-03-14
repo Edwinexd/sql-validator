@@ -8,7 +8,7 @@
 import { createDecipheriv, scryptSync } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import type { OracleData } from "./oracle-types";
+import type { OracleData } from "../data/oracle-types";
 import type { LanguageDefinition, CanonicalTable } from "../languages/types";
 
 // ── CLI argument parsing ───────────────────────────────────────
@@ -34,7 +34,7 @@ if (!password && !usePlain) {
 
 // ── Load oracle ────────────────────────────────────────────────
 function decryptOracle(password: string): OracleData {
-  const encPath = join(__dirname, "oracle.enc");
+  const encPath = join(__dirname, "..", "data", "oracle.enc");
   const buf = readFileSync(encPath);
   const salt = buf.subarray(0, 32);
   const iv = buf.subarray(32, 48);
@@ -49,7 +49,7 @@ function decryptOracle(password: string): OracleData {
 }
 
 function loadPlainOracle(): OracleData {
-  const plainPath = join(__dirname, "oracle.json");
+  const plainPath = join(__dirname, "..", "data", "oracle.json");
   return JSON.parse(readFileSync(plainPath, "utf-8"));
 }
 
@@ -237,6 +237,7 @@ async function main() {
   db.create_function("DAY", (date: string) => new Date(date).getDate());
 
   // Build question pool by running reference queries
+  type ResultData = { columns: string[]; values: (string | number | null)[][] };
   const categoryMap = new Map<number, {
     category_id: number;
     display_number: number;
@@ -244,14 +245,23 @@ async function main() {
       id: number;
       description: string;
       display_sequence: string;
-      result: { columns: string[]; values: (string | number | null)[][] };
+      result: ResultData;
+      alternative_results?: ResultData[];
     }>;
   }>();
 
   let errorCount = 0;
 
+  function runQuery(queryTemplate: string, lang: LanguageDefinition): ResultData {
+    const resolvedQuery = resolveQuery(queryTemplate, lang);
+    const res = db.exec(resolvedQuery);
+    if (res.length > 0) {
+      return { columns: res[0].columns, values: res[0].values as (string | number | null)[][] };
+    }
+    return { columns: [], values: [] };
+  }
+
   for (const q of oracle.questions) {
-    const resolvedQuery = resolveQuery(q.query, lang);
     const description = lang.questionDescriptions[q.id];
 
     if (!description) {
@@ -260,19 +270,32 @@ async function main() {
       continue;
     }
 
-    let result: { columns: string[]; values: (string | number | null)[][] };
+    let result: ResultData;
     try {
-      const res = db.exec(resolvedQuery);
-      if (res.length > 0) {
-        result = { columns: res[0].columns, values: res[0].values as (string | number | null)[][] };
-      } else {
-        result = { columns: [], values: [] };
-      }
+      result = runQuery(q.query, lang);
     } catch (e) {
       console.error(`Error running query for Q${q.id}: ${(e as Error).message}`);
-      console.error(`  Resolved query: ${resolvedQuery}`);
+      console.error(`  Resolved query: ${resolveQuery(q.query, lang)}`);
       errorCount++;
       continue;
+    }
+
+    // Run alternative queries if present
+    let alternative_results: ResultData[] | undefined;
+    if (q.alternativeQueries && q.alternativeQueries.length > 0) {
+      alternative_results = [];
+      for (let i = 0; i < q.alternativeQueries.length; i++) {
+        try {
+          alternative_results.push(runQuery(q.alternativeQueries[i], lang));
+        } catch (e) {
+          console.error(`Error running alternative query ${i + 1} for Q${q.id}: ${(e as Error).message}`);
+          console.error(`  Resolved query: ${resolveQuery(q.alternativeQueries[i], lang)}`);
+          errorCount++;
+        }
+      }
+      if (alternative_results.length === 0) {
+        alternative_results = undefined;
+      }
     }
 
     if (!categoryMap.has(q.categoryId)) {
@@ -288,6 +311,7 @@ async function main() {
       description,
       display_sequence: q.displaySequence,
       result,
+      ...(alternative_results ? { alternative_results } : {}),
     });
   }
 
