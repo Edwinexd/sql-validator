@@ -1,12 +1,12 @@
 /**
  * Language generator: produces per-language questionpool.json and data.sqlite3.
  *
- * Usage: npx tsx scripts/generate-language.ts --lang <code> --password <pw>
- *   or:  npx tsx scripts/generate-language.ts --lang <code> --plain
- *         (uses unencrypted oracle.json directly, for development)
+ * Usage: npx tsx scripts/generate-language.ts --lang <code> [--password <pw> | --plain]
+ *   or:  npx tsx scripts/generate-language.ts --all [--password <pw> | --plain]
+ *         (--all auto-discovers all language files in languages/)
  */
 import { createDecipheriv, scryptSync } from "crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import type { OracleData } from "../data/oracle-types";
 import type { LanguageDefinition, CanonicalTable } from "../languages/types";
@@ -19,17 +19,27 @@ function getArg(name: string): string | undefined {
 }
 
 const langCode = getArg("lang");
+const generateAll = args.includes("--all");
 const password = getArg("password");
 const usePlain = args.includes("--plain");
 
-if (!langCode) {
+if (!langCode && !generateAll) {
   console.error("Usage: npx tsx scripts/generate-language.ts --lang <code> [--password <pw> | --plain]");
+  console.error("       npx tsx scripts/generate-language.ts --all [--password <pw> | --plain]");
   process.exit(1);
 }
 
 if (!password && !usePlain) {
   console.error("Provide --password <pw> or --plain to use unencrypted oracle.json");
   process.exit(1);
+}
+
+/** Discover all language codes from languages/*.ts (excluding types.ts) */
+function discoverLanguages(): string[] {
+  const langDir = join(__dirname, "..", "languages");
+  return readdirSync(langDir)
+    .filter(f => f.endsWith(".ts") && f !== "types.ts")
+    .map(f => f.replace(/\.ts$/, ""));
 }
 
 // ── Load oracle ────────────────────────────────────────────────
@@ -208,14 +218,13 @@ function resolveQuery(template: string, lang: LanguageDefinition): string {
   });
 }
 
-// ── Main ───────────────────────────────────────────────────────
-async function main() {
-  const lang = await loadLanguage(langCode!);
+// ── Generate a single language ────────────────────────────────
+type ResultData = { columns: string[]; values: (string | number | null)[][] };
+
+async function generateForLanguage(code: string, SQL: any): Promise<boolean> {
+  const lang = await loadLanguage(code);
   console.log(`Generating language data for: ${lang.displayName} (${lang.code})`);
 
-  // Create database
-  const initSqlJs = (await import("sql.js")).default;
-  const SQL = await initSqlJs();
   const db = new SQL.Database();
 
   // Create schema and insert data
@@ -237,7 +246,6 @@ async function main() {
   db.create_function("DAY", (date: string) => new Date(date).getDate());
 
   // Build question pool by running reference queries
-  type ResultData = { columns: string[]; values: (string | number | null)[][] };
   const categoryMap = new Map<number, {
     category_id: number;
     display_number: number;
@@ -252,7 +260,7 @@ async function main() {
 
   let errorCount = 0;
 
-  function runQuery(queryTemplate: string, lang: LanguageDefinition): ResultData {
+  function runQuery(queryTemplate: string): ResultData {
     const resolvedQuery = resolveQuery(queryTemplate, lang);
     const res = db.exec(resolvedQuery);
     if (res.length > 0) {
@@ -276,7 +284,7 @@ async function main() {
 
     let result: ResultData;
     try {
-      result = runQuery(q.query, lang);
+      result = runQuery(q.query);
     } catch (e) {
       console.error(`Error running query for Q${q.id}: ${(e as Error).message}`);
       console.error(`  Resolved query: ${resolveQuery(q.query, lang)}`);
@@ -290,7 +298,7 @@ async function main() {
       alternative_results = [];
       for (let i = 0; i < q.alternativeQueries.length; i++) {
         try {
-          alternative_results.push(runQuery(q.alternativeQueries[i], lang));
+          alternative_results.push(runQuery(q.alternativeQueries[i]));
         } catch (e) {
           console.error(`Error running alternative query ${i + 1} for Q${q.id}: ${(e as Error).message}`);
           console.error(`  Resolved query: ${resolveQuery(q.alternativeQueries[i], lang)}`);
@@ -331,7 +339,7 @@ async function main() {
   }
 
   // Write output
-  const outputDir = join(__dirname, "..", "public", "languages", langCode!);
+  const outputDir = join(__dirname, "..", "public", "languages", code);
   if (!existsSync(outputDir)) {
     mkdirSync(outputDir, { recursive: true });
   }
@@ -356,7 +364,23 @@ async function main() {
 
   db.close();
 
-  if (errorCount > 0) {
+  return errorCount === 0;
+}
+
+// ── Main ───────────────────────────────────────────────────────
+async function main() {
+  const initSqlJs = (await import("sql.js")).default;
+  const SQL = await initSqlJs();
+
+  const codes = generateAll ? discoverLanguages() : [langCode!];
+  let allOk = true;
+
+  for (const code of codes) {
+    const ok = await generateForLanguage(code, SQL);
+    if (!ok) allOk = false;
+  }
+
+  if (!allOk) {
     process.exit(1);
   }
 

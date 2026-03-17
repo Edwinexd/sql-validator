@@ -10,16 +10,54 @@ SQL Validator is a fully client-side web application powered by sql.js. Designed
 - **Question Highlighting**: Started and completed questions are highlighted in the question selector making it easy to track progress.
 - **Import/Export Data**: Import and export queries and views to file for sharing and/or backups.
 - **Image Export**: Export queries and views as images in light mode for assignment submission.
+- **Multi-Language Support**: Full i18n support with Swedish and English included. Adding a new language only requires a new language pack file.
 
 ## Usage
 ### Public Deployment
 A public instance of SQL Validator is available at [https://sql-validator.e-su.se](https://sql-validator.e-su.se), powered with Cloudflare Pages.
 
 ### Running Locally
-To deploy SQL Validator locally, follow these steps:
 1. Clone the repository: `git clone https://github.com/Edwinexd/sql-validator.git`
 2. Install dependencies: `npm install`
 3. Start the development server: `npm start`
+
+## Architecture
+### Oracle System
+The **oracle** (`data/oracle.json`) is the single source of truth for the database schema, canonical data, and all 110 reference SQL queries. It uses language-agnostic placeholders (e.g. `{{table:Person}}`, `{{col:Person.city}}`, `{{city:6}}`) that are resolved at generation time using a language pack.
+
+The oracle is encrypted (`data/oracle.enc`) before committing so students cannot see the answers.
+
+### Language Packs
+Language definitions live in `languages/` (e.g. `sv.ts`, `en.ts`). Each pack provides:
+- Localized names, addresses, cities, course names, room names
+- Per-person IDs, postal codes, phone numbers
+- Schema translations (table and column names)
+- 110 localized question descriptions
+- UI strings
+
+### Generation Pipeline
+The `generate-language.ts` script combines the oracle with a language pack to produce per-language output:
+1. Creates a SQLite database with localized schema and data
+2. Runs all reference queries to produce expected result sets
+3. Outputs `questionpool.json` and `data.sqlite3` into `public/languages/<code>/`
+
+The `generate-erd.ts` script produces light/dark SVG database diagrams from the generated databases.
+
+Both scripts support `--all` to auto-discover and process all languages.
+
+### Scripts
+| Script | Description |
+|---|---|
+| `npm run generate-all` | Regenerate all languages (question pools, databases, ERDs) |
+| `npm run generate-lang -- --lang <code> --plain` | Generate a single language using unencrypted oracle |
+| `npm run generate-lang -- --all --plain` | Generate all languages |
+| `npm run generate-erd -- --all` | Regenerate ERD diagrams for all languages |
+| `npm run encrypt-oracle -- <password>` | Encrypt `oracle.json` to `oracle.enc` |
+| `npm run decrypt-oracle -- <password>` | Decrypt `oracle.enc` to `oracle.json` |
+
+### Adding a New Language
+1. Create a new file in `languages/` (e.g. `de.ts`) implementing the `LanguageDefinition` interface
+2. Run `npm run generate-all`
 
 ## Screenshots
 ## Main Application
