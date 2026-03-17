@@ -8,6 +8,7 @@
 import { createDecipheriv, scryptSync } from "crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { join } from "path";
+import type { SqlJsStatic } from "sql.js";
 import type { OracleData } from "../data/oracle-types";
 import type { LanguageDefinition, CanonicalTable } from "../languages/types";
 
@@ -221,7 +222,7 @@ function resolveQuery(template: string, lang: LanguageDefinition): string {
 // ── Generate a single language ────────────────────────────────
 type ResultData = { columns: string[]; values: (string | number | null)[][] };
 
-async function generateForLanguage(code: string, SQL: any): Promise<boolean> {
+async function generateForLanguage(code: string, SQL: SqlJsStatic): Promise<boolean> {
   const lang = await loadLanguage(code);
   console.log(`Generating language data for: ${lang.displayName} (${lang.code})`);
 

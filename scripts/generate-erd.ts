@@ -10,6 +10,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "fs";
 import { join } from "path";
 import { JSDOM } from "jsdom";
+import type { SqlJsStatic } from "sql.js";
 
 // ── CLI args ───────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -45,7 +46,7 @@ function discoverLanguageDirs(): { db: string; out: string }[] {
 async function generateErd(
   dbFilePath: string,
   outputDir: string,
-  deps: { SQL: any; executorToLayout: any; dotToSvg: any; colorErdSVG: any },
+  deps: { SQL: SqlJsStatic; executorToLayout: typeof import("sqlite-erd/src/utils").executorToLayout; dotToSvg: typeof import("sqlite-erd/src/utils").dotToSvg; colorErdSVG: typeof import("sqlite-erd/src/utils").colorErdSVG },
 ) {
   const { SQL, executorToLayout, dotToSvg, colorErdSVG } = deps;
   const dbData = readFileSync(dbFilePath);

@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
-# Pre-commit hook: encrypts oracle.json → oracle.enc and stages it.
-# Only runs if oracle.json has been modified.
+# Pre-commit hook:
+# 1. Runs eslint on staged .ts/.tsx files
+# 2. Encrypts oracle.json → oracle.enc and stages it (if modified)
 
 set -e
+
+# ── Lint staged TypeScript files ─────────────────────────────
+STAGED_TS=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx)$' || true)
+if [ -n "$STAGED_TS" ]; then
+  echo "Running eslint on staged files..."
+  npx eslint $STAGED_TS
+fi
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 ENV_FILE="$REPO_ROOT/.env"
