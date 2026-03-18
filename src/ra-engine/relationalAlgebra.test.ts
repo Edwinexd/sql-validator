@@ -174,22 +174,9 @@ describe("natural join (⋈)", () => {
     expect(norm(sql)).toContain("NATURAL JOIN");
   });
 
-  it("should error on impossible natural join when database is provided", () => {
-    // Mock database that returns different columns for two tables
-    const mockDb = {
-      exec: (sql: string) => {
-        if (sql.includes("TableA")) {
-          return [{ columns: ["id", "name"], values: [] }];
-        }
-        if (sql.includes("TableB")) {
-          return [{ columns: ["code", "description"], values: [] }];
-        }
-        return [{ columns: [], values: [] }];
-      },
-    };
-
-    expect(() => raToSQL("TableA ⋈ TableB", mockDb)).toThrow(RAError);
-    expect(() => raToSQL("TableA ⋈ TableB", mockDb)).toThrow(/no common columns/i);
+  it("should produce NATURAL JOIN SQL even without common columns (let SQLite handle it)", () => {
+    const sql = raToSQL("TableA ⋈ TableB");
+    expect(norm(sql)).toContain("NATURAL JOIN");
   });
 
   it("should not error on valid natural join when database is provided", () => {
@@ -210,6 +197,16 @@ describe("natural join (⋈)", () => {
 
   it("should not error when no database is provided (parse-only mode)", () => {
     expect(() => raToSQL("TableA ⋈ TableB")).not.toThrow();
+  });
+
+  it("should support |X| as natural join", () => {
+    const sql = raToSQL("Person |X| Student");
+    expect(norm(sql)).toContain("NATURAL JOIN");
+  });
+
+  it("should support |><| as natural join", () => {
+    const sql = raToSQL("Person |><| Student");
+    expect(norm(sql)).toContain("NATURAL JOIN");
   });
 });
 
@@ -689,5 +686,68 @@ describe("implicit subscripts (no brackets)", () => {
     expect(norm(sql)).toContain("WITH");
     expect(norm(sql)).toContain("WHERE age > 20");
     expect(norm(sql)).toContain("SELECT name FROM");
+  });
+});
+
+describe("parenthesis-free syntax", () => {
+  it("should allow σ[cond] Table without parens", () => {
+    expect(norm(raToSQL("σ[age > 20] Person"))).toBe(
+      norm("SELECT * FROM (Person) WHERE age > 20")
+    );
+  });
+
+  it("should allow π[cols] Table without parens", () => {
+    expect(norm(raToSQL("π[name] Person"))).toBe(
+      norm("SELECT name FROM (Person)")
+    );
+  });
+
+  it("should allow chained unary ops without parens", () => {
+    const sql = raToSQL("π[name] σ[age > 20] Person");
+    expect(norm(sql)).toContain("SELECT name FROM");
+    expect(norm(sql)).toContain("WHERE age > 20");
+  });
+
+  it("should handle the user's example without excessive parens", () => {
+    const sql = raToSQL("π[person_id, name, city] σ[city = 'York' OR city = 'Bristol'] Person");
+    expect(norm(sql)).toContain("SELECT person_id, name, city FROM");
+    expect(norm(sql)).toContain("WHERE");
+    expect(norm(sql)).toContain("city = 'York'");
+    expect(norm(sql)).toContain("city = 'Bristol'");
+  });
+
+  it("should still work with parens for grouping binary ops", () => {
+    const sql = raToSQL("π[name] (Person ∪ Student)");
+    expect(norm(sql)).toContain("SELECT name FROM");
+    expect(norm(sql)).toContain("UNION");
+  });
+
+  it("should allow δ Table without parens", () => {
+    expect(norm(raToSQL("δ Person"))).toContain("SELECT DISTINCT");
+  });
+
+  it("should allow triple chain without parens", () => {
+    const sql = raToSQL("π[name] σ[age > 20] ρ[n→name] Person");
+    expect(norm(sql)).toContain("SELECT name FROM");
+    expect(norm(sql)).toContain("WHERE age > 20");
+    expect(norm(sql)).toContain("n AS name");
+  });
+});
+
+describe("implicit return from last assignment", () => {
+  it("should return last assigned variable when no explicit result", () => {
+    const sql = raToSQL("A <- σ[age > 20](Person)");
+    expect(norm(sql)).toContain("WITH A AS");
+    expect(norm(sql)).toContain("SELECT * FROM A");
+  });
+
+  it("should return last variable with multiple assignments", () => {
+    const sql = raToSQL("A <- σ[age > 20](Person)\nB <- π[name](A)");
+    expect(norm(sql)).toContain("SELECT * FROM B");
+  });
+
+  it("should still work when explicit result is given", () => {
+    const sql = raToSQL("A <- σ[age > 20](Person)\nA");
+    expect(norm(sql)).toContain("SELECT * FROM A");
   });
 });
