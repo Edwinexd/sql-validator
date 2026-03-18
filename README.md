@@ -1,5 +1,5 @@
 # SQL Validator
-SQL Validator is a fully client-side web application powered by sql.js. Designed for the database course at Stockholm University, it provides an interface for students to write, format, and run SQL queries directly in their browser without the need for a database server. Results can be compared to expected results based on a question bank, and views can be created and managed using the browser's local storage.
+SQL Validator is a fully client-side web application powered by sql.js. It provides an interface for writing, formatting, and running SQL queries directly in the browser without the need for a database server. Results can be compared to expected results based on a question bank, and views can be created and managed using the browser's local storage.
 
 ## Features
 - **Fully Client-Side Execution**: All SQL validation and execution is performed in the browser using sql.js SQLite.

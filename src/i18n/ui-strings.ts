@@ -77,6 +77,11 @@ export const uiStrings: Record<string, Record<string, string>> = {
     languageMismatchWarning: "Warning: This save file was created with a different language ({{fileLang}}). Importing may cause issues.",
     viewLabel: "View",
     changelog: "Changelog",
+    modeSQL: "SQL",
+    modeRA: "Relationsalgebra",
+    generatedSQL: "Genererad SQL",
+    raParseError: "Relationsalgebra-fel: {{message}}",
+    raPlaceholder: "-- Skriv ett relationsalgebrauttryck\n-- Exempel: π[namn](σ[ålder > 20](Person))",
   },
 
   en: {
@@ -151,6 +156,14 @@ export const uiStrings: Record<string, Record<string, string>> = {
     conflicts: "conflicts",
     languageMismatchWarning: "Warning: This save file was created with a different language ({{fileLang}}). Importing may cause issues.",
     viewLabel: "View",
+<<<<<<< HEAD
     changelog: "Changelog",
+=======
+    modeSQL: "SQL",
+    modeRA: "Relational Algebra",
+    generatedSQL: "Generated SQL",
+    raParseError: "Relational algebra error: {{message}}",
+    raPlaceholder: "-- Write a relational algebra expression\n-- Example: π[name](σ[age > 20](Person))",
+>>>>>>> ae97058 (Add relational algebra mode with RA-to-SQL transpiler)
   },
 };
