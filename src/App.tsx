@@ -30,6 +30,7 @@ import "prismjs/themes/prism.css";
 import { format } from "sql-formatter";
 import initSqlJs from "sql.js";
 import ViewsTable, { View } from "./ViewsTable";
+import { raToSQL, RAError } from "./ra-engine/relationalAlgebra";
 
 import { Info, Settings, XCircle, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import ChangelogDialog from "./ChangelogDialog";
@@ -78,6 +79,15 @@ function App() {
   const [exportQuery, setExportQuery] = useState<string | undefined>();
   const [exportingStatus, setExportingStatus] = useState<number>(0);
   const [loadedQuestionCorrect, setLoadedQuestionCorrect] = useState<boolean>(false);
+  const [editorMode, setEditorMode] = useState<"sql" | "ra">("sql");
+  const [generatedSQL, setGeneratedSQL] = useState<string | null>(null);
+
+  const switchEditorMode = useCallback((mode: "sql" | "ra") => {
+    setEditorMode(mode);
+    setGeneratedSQL(null);
+    setError(null);
+    resetResult();
+  }, [resetResult]);
   const exportRendererRef = useRef<HTMLDivElement>(null);
 
   const editorRef = useRef<Editor>(null);
@@ -239,23 +249,38 @@ function App() {
       setWrittenQuestions(wq);
     }
 
-    try {
-      // Check for multiple statements
-      let stmtCount = 0;
-      for (const stmt of database.iterateStatements(query)) {
-        stmtCount++;
-        stmt.free();
-        if (stmtCount > 1) {
-          setError(t("multipleStatements"));
-          return;
+    if (editorMode === "sql") {
+      try {
+        // Check for multiple statements
+        let stmtCount = 0;
+        for (const stmt of database.iterateStatements(query)) {
+          stmtCount++;
+          stmt.free();
+          if (stmtCount > 1) {
+            setError(t("multipleStatements"));
+            return;
+          }
+        }
+        setError(null);
+      } catch (e) {
+        // @ts-expect-error - Error.message is a string
+        setError(e.message);
+      }
+    } else {
+      // In RA mode, try to parse to check for errors
+      try {
+        raToSQL(query);
+        setError(null);
+      } catch (e) {
+        if (e instanceof RAError) {
+          setError(t("raParseError", { message: e.message }));
+        } else {
+          // @ts-expect-error - Error.message is a string
+          setError(e.message);
         }
       }
-      setError(null);
-    } catch (e) {
-      // @ts-expect-error - Error.message is a string
-      setError(e.message);
     }
-  }, [database, query, question, lang, defaultQuery, t]);
+  }, [database, query, question, lang, defaultQuery, t, editorMode]);
 
 
   const refreshViews = useCallback((upsert: boolean) => {
@@ -307,7 +332,24 @@ function App() {
       return;
     }
     try {
-      const res = database.exec(query);
+      let sqlToRun = query;
+      if (editorMode === "ra") {
+        try {
+          sqlToRun = raToSQL(query, database);
+          setGeneratedSQL(sqlToRun);
+        } catch (e) {
+          if (e instanceof RAError) {
+            setError(t("raParseError", { message: e.message }));
+          } else {
+            // @ts-expect-error - Error.message is a string
+            setError(e.message);
+          }
+          return;
+        }
+      } else {
+        setGeneratedSQL(null);
+      }
+      const res = database.exec(sqlToRun);
       setIsViewResult(false);
       setQueryedView(null);
       setEvaluatedQuery(query);
@@ -322,7 +364,7 @@ function App() {
       // @ts-expect-error - Error.message is a string
       setError(e.message);
     }
-  }, [database, query, refreshViews]);
+  }, [database, query, refreshViews, editorMode, t]);
 
   const evalSql = useCallback((sql: string): Result => {
     if (!database) {
@@ -429,7 +471,7 @@ function App() {
 
   // Update mismatch & loadedQuestionCorrect flags when query is changed
   useEffect(() => {
-    if (!database || !question || query === undefined) {
+    if (!database || !question || query === undefined || editorMode === "ra") {
       return;
     }
 
@@ -817,7 +859,23 @@ function App() {
         {/* Query Section with Header */}
         <div className="w-full max-w-4xl">
           <div className="flex justify-between items-center mb-2 px-1">
-            <span className="font-semibold text-base">{t("query")}</span>
+            <div className="flex items-center gap-3">
+              <span className="font-semibold text-base">{t("query")}</span>
+              <div className="flex rounded-md border border-gray-300 dark:border-slate-600 overflow-hidden text-sm">
+                <button
+                  onClick={() => switchEditorMode("sql")}
+                  className={`px-3 py-1 transition-colors ${editorMode === "sql" ? "bg-blue-600 text-white" : "bg-transparent hover:bg-gray-100 dark:hover:bg-slate-700"}`}
+                >
+                  {t("modeSQL")}
+                </button>
+                <button
+                  onClick={() => switchEditorMode("ra")}
+                  className={`px-3 py-1 transition-colors ${editorMode === "ra" ? "bg-blue-600 text-white" : "bg-transparent hover:bg-gray-100 dark:hover:bg-slate-700"}`}
+                >
+                  {t("modeRA")}
+                </button>
+              </div>
+            </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label={t("actionsMenu")}>
@@ -901,23 +959,25 @@ function App() {
                 {t("loadSaved")}
               </Button>
             )}
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (!query) return;
-                setQuery(format(query, {
-                  language: "sqlite",
-                  tabWidth: 2,
-                  useTabs: false,
-                  keywordCase: "upper",
-                  dataTypeCase: "upper",
-                  functionCase: "upper",
-                }));
-              }}
-              disabled={!(error === null) || query === undefined}
-            >
-              {t("formatCode")}
-            </Button>
+            {editorMode === "sql" && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (!query) return;
+                  setQuery(format(query, {
+                    language: "sqlite",
+                    tabWidth: 2,
+                    useTabs: false,
+                    keywordCase: "upper",
+                    dataTypeCase: "upper",
+                    functionCase: "upper",
+                  }));
+                }}
+                disabled={!(error === null) || query === undefined}
+              >
+                {t("formatCode")}
+              </Button>
+            )}
             <Button
               onClick={runQuery}
               disabled={!(error === null) || query === undefined}
@@ -927,6 +987,21 @@ function App() {
             </Button>
           </div>
         </div>
+
+        {editorMode === "ra" && generatedSQL && (
+          <div className="w-full max-w-4xl mt-3">
+            <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">{t("generatedSQL")}</span>
+            <Editor
+              readOnly={true}
+              value={(() => { try { return format(generatedSQL, { language: "sqlite", tabWidth: 2, useTabs: false, keywordCase: "upper", dataTypeCase: "upper", functionCase: "upper" }); } catch { return generatedSQL; } })()}
+              onValueChange={() => null}
+              highlight={code => highlight(code, languages.sql)}
+              padding={10}
+              tabSize={2}
+              className="font-mono text-sm w-full dark:bg-slate-800/50 bg-slate-50 border dark:border-slate-700 border-gray-200 rounded-md mt-1"
+            />
+          </div>
+        )}
 
         <ExportSelectorModal correctQuestions={correctQuestions} onExport={(include) => exportData({include})} ref={exportModalRef} />
         <ImportDialog
