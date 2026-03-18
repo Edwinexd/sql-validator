@@ -177,6 +177,22 @@ function tokenize(input: string): Token[] {
     if (ch === ";") { tokens.push({ type: TokenType.SEMICOLON, value: ch, pos }); i++; continue; }
     if (ch === "\\") { tokens.push({ type: TokenType.MINUS, value: ch, pos }); i++; continue; }
 
+    // |X| or |><| — natural join
+    if (ch === "|") {
+      // Check for |X|
+      if (i + 2 < input.length && (input[i + 1] === "X" || input[i + 1] === "x") && input[i + 2] === "|") {
+        tokens.push({ type: TokenType.JOIN, value: "|X|", pos });
+        i += 3;
+        continue;
+      }
+      // Check for |><|
+      if (i + 3 < input.length && input[i + 1] === ">" && input[i + 2] === "<" && input[i + 3] === "|") {
+        tokens.push({ type: TokenType.JOIN, value: "|><|", pos });
+        i += 4;
+        continue;
+      }
+    }
+
     // Arrow: → or ->
     if (ch === "→") { tokens.push({ type: TokenType.ARROW, value: ch, pos }); i++; continue; }
     if (ch === "-" && i + 1 < input.length && input[i + 1] === ">") {
@@ -431,6 +447,12 @@ class Parser {
       return { assignments, result };
     }
 
+    // If we only have assignments and no final expression, implicitly return the last assigned variable
+    if (assignments.length > 0) {
+      const lastName = assignments[assignments.length - 1].name;
+      return { assignments, result: { type: "table", name: lastName } };
+    }
+
     throw new RAError("Empty expression");
   }
 
@@ -595,6 +617,21 @@ class Parser {
     return this.parseSortColumns();
   }
 
+  /**
+   * Parse the operand of a unary operator.
+   * If `(` follows, parse `(expr)`. Otherwise parse another unary or a table name.
+   * This allows `π[cols] σ[cond] Person` without mandatory parentheses.
+   */
+  private parseUnaryOperand(): RANode {
+    if (this.peek().type === TokenType.LPAREN) {
+      this.advance();
+      const expr = this.parseUnionExpr();
+      this.expect(TokenType.RPAREN);
+      return expr;
+    }
+    return this.parseUnaryExpr();
+  }
+
   private parseUnaryExpr(): RANode {
     const t = this.peek().type;
 
@@ -602,12 +639,9 @@ class Parser {
       this.advance();
       if (this.hasSubscript()) {
         const condition = this.parseSubscriptCondition();
-        this.expect(TokenType.LPAREN);
-        const relation = this.parseUnionExpr();
-        this.expect(TokenType.RPAREN);
+        const relation = this.parseUnaryOperand();
         return { type: "selection", condition, relation };
       }
-      // σ(R) with no subscript — error
       throw new RAError("Selection (σ) requires a condition — use σ[condition](R) or σ condition (R)");
     }
 
@@ -615,9 +649,7 @@ class Parser {
       this.advance();
       if (this.hasSubscript()) {
         const columns = this.parseSubscriptColumns();
-        this.expect(TokenType.LPAREN);
-        const relation = this.parseUnionExpr();
-        this.expect(TokenType.RPAREN);
+        const relation = this.parseUnaryOperand();
         return { type: "projection", columns, relation };
       }
       throw new RAError("Projection (π) requires column list — use π[cols](R) or π cols (R)");
@@ -627,9 +659,7 @@ class Parser {
       this.advance();
       if (this.hasSubscript()) {
         const mappings = this.parseSubscriptRenameMappings();
-        this.expect(TokenType.LPAREN);
-        const relation = this.parseUnionExpr();
-        this.expect(TokenType.RPAREN);
+        const relation = this.parseUnaryOperand();
         return { type: "rename", mappings, relation };
       }
       throw new RAError("Rename (ρ) requires mappings — use ρ[old→new](R) or ρ old→new (R)");
@@ -639,9 +669,7 @@ class Parser {
       this.advance();
       if (this.hasSubscript()) {
         const { groupBy, aggregates } = this.parseSubscriptGroupSpec();
-        this.expect(TokenType.LPAREN);
-        const relation = this.parseUnionExpr();
-        this.expect(TokenType.RPAREN);
+        const relation = this.parseUnaryOperand();
         return { type: "group", groupBy, aggregates, relation };
       }
       throw new RAError("Grouping (γ) requires specification — use γ[groupCols; AGG(col)](R)");
@@ -651,9 +679,7 @@ class Parser {
       this.advance();
       if (this.hasSubscript()) {
         const columns = this.parseSubscriptSortColumns();
-        this.expect(TokenType.LPAREN);
-        const relation = this.parseUnionExpr();
-        this.expect(TokenType.RPAREN);
+        const relation = this.parseUnaryOperand();
         return { type: "sort", columns, relation };
       }
       throw new RAError("Sort (τ) requires column list — use τ[col](R) or τ col (R)");
@@ -661,9 +687,7 @@ class Parser {
 
     if (t === TokenType.DELTA) {
       this.advance();
-      this.expect(TokenType.LPAREN);
-      const relation = this.parseUnionExpr();
-      this.expect(TokenType.RPAREN);
+      const relation = this.parseUnaryOperand();
       return { type: "distinct", relation };
     }
 
@@ -989,12 +1013,6 @@ interface DatabaseHandle {
  * Resolve the column names produced by a SQL expression using the database.
  * Executes a LIMIT 0 query to get column metadata without fetching data.
  */
-function resolveColumns(sql: string, db: DatabaseHandle): string[] {
-  const res = db.exec(`SELECT * FROM (${sql}) LIMIT 0`);
-  if (res.length === 0) return [];
-  return res[0].columns;
-}
-
 function nodeToSQL(node: RANode, db?: DatabaseHandle): string {
   switch (node.type) {
     case "table":
@@ -1042,19 +1060,6 @@ function nodeToSQL(node: RANode, db?: DatabaseHandle): string {
     case "naturalJoin": {
       const leftSQL = nodeToSQL(node.left, db);
       const rightSQL = nodeToSQL(node.right, db);
-      // Validate that there are common columns when a database is available
-      if (db) {
-        const leftCols = resolveColumns(leftSQL, db);
-        const rightCols = resolveColumns(rightSQL, db);
-        const common = leftCols.filter(c => rightCols.includes(c));
-        if (common.length === 0) {
-          throw new RAError(
-            "Natural join has no common columns between the two relations. " +
-            "Left columns: [" + leftCols.join(", ") + "], Right columns: [" + rightCols.join(", ") + "]. " +
-            "Use a cross product (×) if a cartesian product is intended, or a theta join (⋈[condition]) to specify the join condition."
-          );
-        }
-      }
       return `SELECT * FROM (${leftSQL}) AS _ra${subqueryCounter++} NATURAL JOIN (${rightSQL}) AS _ra${subqueryCounter++}`;
     }
 

@@ -31,6 +31,8 @@ import { format } from "sql-formatter";
 import initSqlJs from "sql.js";
 import ViewsTable, { View } from "./ViewsTable";
 import { raToSQL, RAError } from "./ra-engine/relationalAlgebra";
+import RAReference from "./ra-engine/RAReference";
+import { highlightRA } from "./ra-engine/raHighlight";
 
 import { Info, Settings, XCircle, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import ChangelogDialog from "./ChangelogDialog";
@@ -56,6 +58,11 @@ import { useLanguage, langKey, getUrlParam, setUrlParam } from "./i18n/context";
 import LanguageSelector from "./LanguageSelector";
 import { getQuestion } from "./QuestionSelector";
 
+/** Storage key for a question's query, namespaced by editor mode */
+function queryKey(questionId: number, mode: "sql" | "ra"): string {
+  return mode === "ra" ? `ra-questionId-${questionId}` : `questionId-${questionId}`;
+}
+
 function App() {
   const { lang, t, questions, dbArrayBuffer, defaultQuery } = useLanguage();
   const [question, setQuestion] = useState<Question>();
@@ -80,14 +87,7 @@ function App() {
   const [exportingStatus, setExportingStatus] = useState<number>(0);
   const [loadedQuestionCorrect, setLoadedQuestionCorrect] = useState<boolean>(false);
   const [editorMode, setEditorMode] = useState<"sql" | "ra">("sql");
-  const [generatedSQL, setGeneratedSQL] = useState<string | null>(null);
 
-  const switchEditorMode = useCallback((mode: "sql" | "ra") => {
-    setEditorMode(mode);
-    setGeneratedSQL(null);
-    setError(null);
-    resetResult();
-  }, [resetResult]);
   const exportRendererRef = useRef<HTMLDivElement>(null);
 
   const editorRef = useRef<Editor>(null);
@@ -154,6 +154,27 @@ function App() {
     setQueryedView(null);
   }, []);
 
+  const switchEditorMode = useCallback((mode: "sql" | "ra") => {
+    // Save current query before switching
+    if (question && query !== undefined) {
+      const currentKey = queryKey(question.id, editorMode);
+      if (query === defaultQuery || query === "") {
+        localStorage.removeItem(langKey(lang, currentKey));
+      } else {
+        localStorage.setItem(langKey(lang, currentKey), query);
+      }
+    }
+    setEditorMode(mode);
+
+    setError(null);
+    resetResult();
+    // Load query for the new mode
+    if (question) {
+      const newKey = queryKey(question.id, mode);
+      setQuery(localStorage.getItem(langKey(lang, newKey)) || (mode === "ra" ? "" : defaultQuery));
+    }
+  }, [resetResult, question, query, editorMode, lang, defaultQuery]);
+
   const initDb = useCallback(async () => {
     if (!dbArrayBuffer) return;
     resetResult();
@@ -200,7 +221,7 @@ function App() {
         const resolved = getQuestion(q.id, questions);
         if (resolved) {
           setQuestion(resolved);
-          setQuery(localStorage.getItem(langKey(lang, "questionId-" + resolved.id)) || defaultQuery);
+          setQuery(localStorage.getItem(langKey(lang, queryKey(resolved.id, editorMode))) || (editorMode === "ra" ? "" : defaultQuery));
         }
       }
     }
@@ -232,15 +253,18 @@ function App() {
     }
     let wq = JSON.parse(localStorage.getItem(langKey(lang, "writtenQuestions")) || "[]");
     const initialLength = wq.length;
+    const storageKey = queryKey(question.id, editorMode);
     if (query === defaultQuery || query === "") {
-      localStorage.removeItem(langKey(lang, "questionId-" + question.id));
-      // remove from writtenQuestions if it exists there as well
-      const filtered = wq.filter((id: number) => id !== question.id);
-      wq = filtered;
+      localStorage.removeItem(langKey(lang, storageKey));
+      // remove from writtenQuestions if it exists there as well (only for SQL mode)
+      if (editorMode === "sql") {
+        const filtered = wq.filter((id: number) => id !== question.id);
+        wq = filtered;
+      }
     } else {
-      localStorage.setItem(langKey(lang, "questionId-" + question.id), query);
-      // ensure that questionid is in localstorage writtenQuestions
-      if (!wq.includes(question.id)) {
+      localStorage.setItem(langKey(lang, storageKey), query);
+      // ensure that questionid is in localstorage writtenQuestions (only for SQL mode)
+      if (editorMode === "sql" && !wq.includes(question.id)) {
         wq.push(question.id);
       }
     }
@@ -336,7 +360,6 @@ function App() {
       if (editorMode === "ra") {
         try {
           sqlToRun = raToSQL(query, database);
-          setGeneratedSQL(sqlToRun);
         } catch (e) {
           if (e instanceof RAError) {
             setError(t("raParseError", { message: e.message }));
@@ -346,8 +369,6 @@ function App() {
           }
           return;
         }
-      } else {
-        setGeneratedSQL(null);
       }
       const res = database.exec(sqlToRun);
       setIsViewResult(false);
@@ -448,7 +469,8 @@ function App() {
     setIsCorrect(true);
     setMatchedResult(matchedAlt ?? question.evaluable_result);
 
-    localStorage.setItem(langKey(lang, `correctQuestionId-${question.id}`), query);
+    const correctKey = editorMode === "ra" ? `ra-correctQuestionId-${question.id}` : `correctQuestionId-${question.id}`;
+    localStorage.setItem(langKey(lang, correctKey), query);
     setCorrectQueryMismatch(false);
     setLoadedQuestionCorrect(true);
 
@@ -462,20 +484,22 @@ function App() {
 
   // Save query based on question
   const loadQuery = useCallback((_oldQuestion: Question | undefined, newQuestion: Question) => {
-    setQuery(localStorage.getItem(langKey(lang, "questionId-" + newQuestion.id)) || defaultQuery);
+    const key = queryKey(newQuestion.id, editorMode);
+    setQuery(localStorage.getItem(langKey(lang, key)) || (editorMode === "ra" ? "" : defaultQuery));
     // This prevents user from ctrl-z'ing to a different question
     if (editorRef.current) {
       editorRef.current!.session = {history: { stack: [], offset: 0 }};
     }
-  }, [setQuery, lang, defaultQuery]);
+  }, [setQuery, lang, defaultQuery, editorMode]);
 
   // Update mismatch & loadedQuestionCorrect flags when query is changed
   useEffect(() => {
-    if (!database || !question || query === undefined || editorMode === "ra") {
+    if (!database || !question || query === undefined) {
       return;
     }
 
-    const correctQuery = localStorage.getItem(langKey(lang, `correctQuestionId-${question.id}`));
+    const correctKey = editorMode === "ra" ? `ra-correctQuestionId-${question.id}` : `correctQuestionId-${question.id}`;
+    const correctQuery = localStorage.getItem(langKey(lang, correctKey));
     if (!correctQuery) {
       setCorrectQueryMismatch(false);
       setLoadedQuestionCorrect(false);
@@ -484,9 +508,25 @@ function App() {
 
     setLoadedQuestionCorrect(true);
 
-    let currentQuery = "";
-    try {
-      currentQuery = format(query + (query.endsWith(";") ? "" : ";"), {
+    if (editorMode === "ra") {
+      // For RA, compare raw text (trimmed)
+      setCorrectQueryMismatch(query.trim() !== correctQuery.trim());
+    } else {
+      let currentQuery = "";
+      try {
+        currentQuery = format(query + (query.endsWith(";") ? "" : ";"), {
+          language: "sqlite",
+          tabWidth: 2,
+          useTabs: false,
+          keywordCase: "upper",
+          dataTypeCase: "upper",
+          functionCase: "upper",
+        });
+      } catch {
+        setCorrectQueryMismatch(true);
+        return;
+      }
+      const correctQueryFormatted = format(correctQuery + (correctQuery?.endsWith(";") ? "" : ";"), {
         language: "sqlite",
         tabWidth: 2,
         useTabs: false,
@@ -494,20 +534,9 @@ function App() {
         dataTypeCase: "upper",
         functionCase: "upper",
       });
-    } catch {
-      setCorrectQueryMismatch(true);
-      return;
+      setCorrectQueryMismatch(currentQuery !== correctQueryFormatted);
     }
-    const correctQueryFormatted = format(correctQuery + (correctQuery?.endsWith(";") ? "" : ";"), {
-      language: "sqlite",
-      tabWidth: 2,
-      useTabs: false,
-      keywordCase: "upper",
-      dataTypeCase: "upper",
-      functionCase: "upper",
-    });
-    setCorrectQueryMismatch(currentQuery !== correctQueryFormatted);
-  }, [database, question, query, lang]);
+  }, [database, question, query, lang, editorMode]);
 
   const exportData = useCallback((options?: { include?: number[]}) => {
     if (!database) {
@@ -861,16 +890,17 @@ function App() {
           <div className="flex justify-between items-center mb-2 px-1">
             <div className="flex items-center gap-3">
               <span className="font-semibold text-base">{t("query")}</span>
-              <div className="flex rounded-md border border-gray-300 dark:border-slate-600 overflow-hidden text-sm">
+              <div className="inline-flex gap-1 text-sm">
                 <button
                   onClick={() => switchEditorMode("sql")}
-                  className={`px-3 py-1 transition-colors ${editorMode === "sql" ? "bg-blue-600 text-white" : "bg-transparent hover:bg-gray-100 dark:hover:bg-slate-700"}`}
+                  className={`px-2 py-0.5 rounded transition-colors ${editorMode === "sql" ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-medium" : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"}`}
                 >
                   {t("modeSQL")}
                 </button>
+                <span className="text-gray-300 dark:text-gray-600 select-none">/</span>
                 <button
                   onClick={() => switchEditorMode("ra")}
-                  className={`px-3 py-1 transition-colors ${editorMode === "ra" ? "bg-blue-600 text-white" : "bg-transparent hover:bg-gray-100 dark:hover:bg-slate-700"}`}
+                  className={`px-2 py-0.5 rounded transition-colors ${editorMode === "ra" ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-medium" : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"}`}
                 >
                   {t("modeRA")}
                 </button>
@@ -902,10 +932,10 @@ function App() {
             <Editor
               id="placeholder-editor"
               itemID="placeholder-editor"
-              value={t("selectQuestionComment")}
+              value={editorMode === "ra" ? t("raPlaceholder") : t("selectQuestionComment")}
               disabled={true}
               onValueChange={_code => null}
-              highlight={code => highlight(code, languages.sql)}
+              highlight={code => editorMode === "ra" ? highlightRA(code) : highlight(code, languages.sql)}
               padding={10}
               tabSize={2}
               className="font-mono text-base w-full dark:bg-slate-800 bg-slate-100 min-h-32 rounded-md"
@@ -917,7 +947,7 @@ function App() {
               itemID="editor"
               value={query}
               onValueChange={code => setQuery(code)}
-              highlight={code => highlight(code, languages.sql)}
+              highlight={code => editorMode === "ra" ? highlightRA(code) : highlight(code, languages.sql)}
               padding={10}
               tabSize={2}
               className="font-mono text-base w-full dark:bg-slate-800 bg-slate-100 border dark:border-slate-600 border-gray-300 min-h-32 rounded-md"
@@ -942,7 +972,10 @@ function App() {
                 <span className="text-sm">{t("queryMismatch")}</span>
               </div>
             )}
-            <a href="https://github.com/Edwinexd/db-sqlite-tools/releases/latest/download/DB_SQLite_Implementation_Tools.pdf" target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t("sqlReference")}</a>
+            {editorMode === "ra"
+              ? <RAReference />
+              : <a href="https://github.com/Edwinexd/db-sqlite-tools/releases/latest/download/DB_SQLite_Implementation_Tools.pdf" target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t("sqlReference")}</a>
+            }
           </div>
 
           {/* Right side - Buttons */}
@@ -952,7 +985,8 @@ function App() {
                 variant="outline"
                 onClick={() => {
                   if (!question) return;
-                  setQuery(localStorage.getItem(langKey(lang, `correctQuestionId-${question.id}`)) || defaultQuery);
+                  const correctKey = editorMode === "ra" ? `ra-correctQuestionId-${question.id}` : `correctQuestionId-${question.id}`;
+                  setQuery(localStorage.getItem(langKey(lang, correctKey)) || (editorMode === "ra" ? "" : defaultQuery));
                 }}
                 className="border-yellow-500 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20"
               >
@@ -988,20 +1022,6 @@ function App() {
           </div>
         </div>
 
-        {editorMode === "ra" && generatedSQL && (
-          <div className="w-full max-w-4xl mt-3">
-            <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">{t("generatedSQL")}</span>
-            <Editor
-              readOnly={true}
-              value={(() => { try { return format(generatedSQL, { language: "sqlite", tabWidth: 2, useTabs: false, keywordCase: "upper", dataTypeCase: "upper", functionCase: "upper" }); } catch { return generatedSQL; } })()}
-              onValueChange={() => null}
-              highlight={code => highlight(code, languages.sql)}
-              padding={10}
-              tabSize={2}
-              className="font-mono text-sm w-full dark:bg-slate-800/50 bg-slate-50 border dark:border-slate-700 border-gray-200 rounded-md mt-1"
-            />
-          </div>
-        )}
 
         <ExportSelectorModal correctQuestions={correctQuestions} onExport={(include) => exportData({include})} ref={exportModalRef} />
         <ImportDialog
