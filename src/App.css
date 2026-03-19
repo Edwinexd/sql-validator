@@ -45,3 +45,18 @@ body {
 .dark .diff-added-line {
   background-color: rgba(34, 197, 94, 0.15);
 }
+
+/* RA Preview styling */
+.ra-prev-op { color: #7c3aed; font-weight: bold; }
+.ra-prev-assign { color: #7c3aed; font-weight: bold; }
+.ra-prev-logic { color: #2563eb; font-weight: bold; }
+.ra-prev-str { color: #059669; }
+.ra-prev-num { color: #d97706; }
+.ra-prev-comment { color: #9ca3af; font-style: italic; }
+.ra-prev-sub { font-size: 0.8em; color: #6d28d9; }
+.dark .ra-prev-op { color: #a78bfa; }
+.dark .ra-prev-assign { color: #a78bfa; }
+.dark .ra-prev-logic { color: #60a5fa; }
+.dark .ra-prev-str { color: #34d399; }
+.dark .ra-prev-num { color: #fbbf24; }
+.dark .ra-prev-sub { color: #c4b5fd; }
