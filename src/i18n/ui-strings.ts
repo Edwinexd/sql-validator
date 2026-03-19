@@ -76,6 +76,7 @@ export const uiStrings: Record<string, Record<string, string>> = {
     conflicts: "conflicts",
     languageMismatchWarning: "Warning: This save file was created with a different language ({{fileLang}}). Importing may cause issues.",
     viewLabel: "View",
+    changelog: "Changelog",
   },
 
   en: {
@@ -150,5 +151,6 @@ export const uiStrings: Record<string, Record<string, string>> = {
     conflicts: "conflicts",
     languageMismatchWarning: "Warning: This save file was created with a different language ({{fileLang}}). Importing may cause issues.",
     viewLabel: "View",
+    changelog: "Changelog",
   },
 };

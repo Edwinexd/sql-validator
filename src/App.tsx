@@ -32,6 +32,7 @@ import initSqlJs from "sql.js";
 import ViewsTable, { View } from "./ViewsTable";
 
 import { Info, Settings, XCircle, CheckCircle2, Eye, EyeOff } from "lucide-react";
+import ChangelogDialog from "./ChangelogDialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -1034,6 +1035,7 @@ function App() {
             <span>-</span>
             <a href="https://github.com/Edwinexd/sql-validator?tab=GPL-3.0-1-ov-file" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">GPL-3.0</a>
             <a href="https://github.com/Edwinexd/sql-validator/issues" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">Report Issue</a>
+            <ChangelogDialog />
             <PrivacyNoticeToggle></PrivacyNoticeToggle>
           </div>
         </footer>
