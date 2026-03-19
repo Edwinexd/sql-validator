@@ -291,9 +291,9 @@ function App() {
         setError(e.message);
       }
     } else {
-      // In RA mode, try to parse to check for errors
+      // In RA mode, try to parse and validate against database
       try {
-        raToSQL(query);
+        raToSQL(query, database);
         setError(null);
       } catch (e) {
         if (e instanceof RAError) {
