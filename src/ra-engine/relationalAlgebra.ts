@@ -1007,12 +1007,47 @@ let subqueryCounter = 0;
  */
 interface DatabaseHandle {
   exec(sql: string): { columns: string[]; values: unknown[][] }[];
+  prepare(sql: string): { step(): boolean; getColumnNames(): string[]; free(): void };
 }
 
 /**
  * Resolve the column names produced by a SQL expression using the database.
- * Executes a LIMIT 0 query to get column metadata without fetching data.
+ * Uses prepare() to get column metadata without executing the query.
  */
+function resolveColumns(sql: string, db: DatabaseHandle): string[] {
+  // For bare table names, use PRAGMA table_info which always works
+  if (/^\w+$/.test(sql.trim())) {
+    const tableName = sql.trim();
+    try {
+      const res = db.exec(`PRAGMA table_info(${tableName})`);
+      if (res.length > 0 && res[0].values.length > 0) {
+        // PRAGMA table_info returns rows with [cid, name, type, notnull, dflt_value, pk]
+        return res[0].values.map((row: unknown[]) => String(row[1]));
+      }
+    } catch {
+      // Table doesn't exist
+    }
+    throw new RAError(`Table '${tableName}' does not exist`);
+  }
+
+  // For complex expressions, use prepare to get column names
+  try {
+    const probeSQL = `SELECT * FROM (${sql}) LIMIT 0`;
+    const stmt = db.prepare(probeSQL);
+    // Step once to initialize column metadata (required by some sql.js versions)
+    stmt.step();
+    const cols = stmt.getColumnNames();
+    stmt.free();
+    return cols;
+  } catch (e) {
+    const msg = (e as Error).message || String(e);
+    if (/no such table/i.test(msg)) {
+      const match = msg.match(/no such table:\s*(\S+)/i);
+      throw new RAError(match ? `Table '${match[1]}' does not exist` : msg);
+    }
+    throw new RAError(msg);
+  }
+}
 function nodeToSQL(node: RANode, db?: DatabaseHandle): string {
   switch (node.type) {
     case "table":
@@ -1060,6 +1095,20 @@ function nodeToSQL(node: RANode, db?: DatabaseHandle): string {
     case "naturalJoin": {
       const leftSQL = nodeToSQL(node.left, db);
       const rightSQL = nodeToSQL(node.right, db);
+      if (db) {
+        const leftCols = resolveColumns(leftSQL, db);
+        const rightCols = resolveColumns(rightSQL, db);
+        if (leftCols.length > 0 && rightCols.length > 0) {
+          const common = leftCols.filter(c => rightCols.includes(c));
+          if (common.length === 0) {
+            throw new RAError(
+              "Natural join has no common columns between the two relations. " +
+              "Left columns: [" + leftCols.join(", ") + "], Right columns: [" + rightCols.join(", ") + "]. " +
+              "Use a cross product (×) if a cartesian product is intended, or a theta join (⋈[condition]) to specify the join condition."
+            );
+          }
+        }
+      }
       return `SELECT * FROM (${leftSQL}) AS _ra${subqueryCounter++} NATURAL JOIN (${rightSQL}) AS _ra${subqueryCounter++}`;
     }
 
@@ -1114,23 +1163,88 @@ function nodeToSQL(node: RANode, db?: DatabaseHandle): string {
   }
 }
 
+/**
+ * Rewrite table references in an AST node using a name mapping.
+ * Used to handle variable reassignment (A <- ...; A <- ...) by pointing
+ * references to the correct versioned CTE name.
+ */
+function rewriteTableRefs(node: RANode, nameMap: Record<string, string>): RANode {
+  switch (node.type) {
+    case "table":
+      return nameMap[node.name] ? { type: "table", name: nameMap[node.name] } : node;
+    case "selection":
+      return { ...node, relation: rewriteTableRefs(node.relation, nameMap) };
+    case "projection":
+      return { ...node, relation: rewriteTableRefs(node.relation, nameMap) };
+    case "rename":
+      return { ...node, relation: rewriteTableRefs(node.relation, nameMap) };
+    case "group":
+      return { ...node, relation: rewriteTableRefs(node.relation, nameMap) };
+    case "sort":
+      return { ...node, relation: rewriteTableRefs(node.relation, nameMap) };
+    case "distinct":
+      return { ...node, relation: rewriteTableRefs(node.relation, nameMap) };
+    case "crossProduct":
+    case "naturalJoin":
+    case "union":
+    case "intersect":
+    case "difference":
+    case "division":
+    case "leftSemiJoin":
+    case "rightSemiJoin":
+    case "antiJoin":
+      return { ...node, left: rewriteTableRefs(node.left, nameMap), right: rewriteTableRefs(node.right, nameMap) };
+    case "thetaJoin":
+    case "leftJoin":
+    case "rightJoin":
+    case "fullJoin":
+      return { ...node, left: rewriteTableRefs(node.left, nameMap), right: rewriteTableRefs(node.right, nameMap) };
+    default:
+      return node;
+  }
+}
+
 function programToSQL(program: RAProgram, db?: DatabaseHandle): string {
   if (program.assignments.length === 0) {
     return nodeToSQL(program.result, db);
   }
 
-  // Use CTEs (WITH clauses) for assignments
-  const ctes = program.assignments.map(a => {
-    const sql = nodeToSQL(a.expr, db);
-    // Wrap non-table expressions in SELECT * FROM (...) for CTE compatibility
-    const wrappedSQL = /^\w+$/.test(sql) ? `SELECT * FROM ${sql}` : sql;
-    return `${a.name} AS (${wrappedSQL})`;
-  });
+  // Use CTEs (WITH clauses) for assignments.
+  // Handle reassignment (A <- ..., A <- ...) by versioning CTE names
+  // and rewriting references in subsequent expressions.
+  const ctes: string[] = [];
+  // Maps variable name -> current CTE name (may be versioned like A_v2)
+  const nameMap: Record<string, string> = {};
+  // Track how many times each name has been assigned
+  const assignCount: Record<string, number> = {};
 
-  const resultSQL = nodeToSQL(program.result, db);
-  // Wrap bare table reference in SELECT for the final expression
+  for (const a of program.assignments) {
+    if (a.expr.type === "table" && a.expr.name === a.name && !nameMap[a.name]) {
+      // Self-referential assignment (A <- A) where A is a real table — skip, it's a no-op
+      continue;
+    }
+
+    // Rewrite the expression: replace table references with their current CTE aliases
+    const rewrittenExpr = rewriteTableRefs(a.expr, nameMap);
+    const sql = nodeToSQL(rewrittenExpr, db);
+    const wrappedSQL = /^\w+$/.test(sql) ? `SELECT * FROM ${sql}` : sql;
+
+    // Determine the CTE name for this assignment
+    assignCount[a.name] = (assignCount[a.name] || 0) + 1;
+    const cteName = assignCount[a.name] > 1 ? `${a.name}_v${assignCount[a.name]}` : a.name;
+    nameMap[a.name] = cteName;
+
+    ctes.push(`${cteName} AS (${wrappedSQL})`);
+  }
+
+  // Rewrite the result expression with final name mappings
+  const rewrittenResult = rewriteTableRefs(program.result, nameMap);
+  const resultSQL = nodeToSQL(rewrittenResult, db);
   const wrappedResult = /^\w+$/.test(resultSQL) ? `SELECT * FROM ${resultSQL}` : resultSQL;
 
+  if (ctes.length === 0) {
+    return wrappedResult;
+  }
   return `WITH ${ctes.join(", ")} ${wrappedResult}`;
 }
 
