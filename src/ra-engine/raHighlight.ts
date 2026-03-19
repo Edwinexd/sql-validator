@@ -111,9 +111,9 @@ export function highlightRA(code: string): string {
     }
 
     // Assignment arrow: ← (already handled above as binary symbol)
-    // Arrow: <- (assignment) — keep both chars for editor alignment, tight letter-spacing
+    // Arrow: <- (assignment) — keep both chars for editor alignment
     if (code[i] === "<" && i + 1 < code.length && code[i + 1] === "-") {
-      result.push(`<span style="${S.assign} letter-spacing: -0.15em;">&lt;-</span>`);
+      result.push(`<span style="${S.assign}">&lt;-</span>`);
       i += 2;
       continue;
     }
