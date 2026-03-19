@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import initSqlJs from "sql.js";
 import { raToSQL, RAError } from "./relationalAlgebra";
 
 // ─── Helper ─────────────────────────────────────────────────────────────────
@@ -174,25 +175,46 @@ describe("natural join (⋈)", () => {
     expect(norm(sql)).toContain("NATURAL JOIN");
   });
 
-  it("should produce NATURAL JOIN SQL even without common columns (let SQLite handle it)", () => {
-    const sql = raToSQL("TableA ⋈ TableB");
-    expect(norm(sql)).toContain("NATURAL JOIN");
+  it("should error on impossible natural join when database is provided", async () => {
+    const SQL = await initSqlJs();
+    const db = new SQL.Database();
+    db.run("CREATE TABLE TableA (id INTEGER, name TEXT)");
+    db.run("CREATE TABLE TableB (code TEXT, description TEXT)");
+
+    expect(() => raToSQL("TableA ⋈ TableB", db)).toThrow(RAError);
+    expect(() => raToSQL("TableA ⋈ TableB", db)).toThrow(/no common columns/i);
+    db.close();
   });
 
-  it("should not error on valid natural join when database is provided", () => {
-    const mockDb = {
-      exec: (sql: string) => {
-        if (sql.includes("Person")) {
-          return [{ columns: ["id", "name", "city"], values: [] }];
-        }
-        if (sql.includes("Student")) {
-          return [{ columns: ["id", "hasDisability"], values: [] }];
-        }
-        return [{ columns: [], values: [] }];
-      },
-    };
+  it("should not error on valid natural join when database is provided", async () => {
+    const SQL = await initSqlJs();
+    const db = new SQL.Database();
+    db.run("CREATE TABLE Person (id INTEGER, name TEXT, city TEXT)");
+    db.run("CREATE TABLE Student (id INTEGER, hasDisability INTEGER)");
 
-    expect(() => raToSQL("Person ⋈ Student", mockDb)).not.toThrow();
+    expect(() => raToSQL("Person ⋈ Student", db)).not.toThrow();
+    db.close();
+  });
+
+  it("should error on natural join with non-existent table", async () => {
+    const SQL = await initSqlJs();
+    const db = new SQL.Database();
+    db.run("CREATE TABLE Person (id INTEGER, name TEXT)");
+
+    expect(() => raToSQL("Person ⋈ Room", db)).toThrow(RAError);
+    expect(() => raToSQL("Person ⋈ Room", db)).toThrow(/Room/);
+    db.close();
+  });
+
+  it("should error on natural join with no common columns through subquery", async () => {
+    const SQL = await initSqlJs();
+    const db = new SQL.Database();
+    db.run("CREATE TABLE Person (person_id INTEGER, name TEXT, city TEXT)");
+    db.run("CREATE TABLE Room (room_id INTEGER, building TEXT, capacity INTEGER)");
+
+    expect(() => raToSQL("σ[city = 'York'](Person) ⋈ Room", db)).toThrow(RAError);
+    expect(() => raToSQL("σ[city = 'York'](Person) ⋈ Room", db)).toThrow(/no common columns/i);
+    db.close();
   });
 
   it("should not error when no database is provided (parse-only mode)", () => {
@@ -749,5 +771,25 @@ describe("implicit return from last assignment", () => {
   it("should still work when explicit result is given", () => {
     const sql = raToSQL("A <- σ[age > 20](Person)\nA");
     expect(norm(sql)).toContain("SELECT * FROM A");
+  });
+
+  it("should handle self-referential A <- A as a no-op", () => {
+    const sql = raToSQL("A <- A");
+    expect(norm(sql)).toBe(norm("SELECT * FROM A"));
+  });
+
+  it("should handle variable reassignment with versioned CTE names", () => {
+    const sql = raToSQL("A <- σ[age > 20](Person)\nA <- π[name](A)\nA");
+    expect(norm(sql)).toContain("WITH A AS");
+    expect(norm(sql)).toContain("A_v2 AS");
+    expect(norm(sql)).toContain("SELECT * FROM A_v2");
+  });
+
+  it("should handle triple reassignment", () => {
+    const sql = raToSQL("X <- Person\nX <- σ[age > 20](X)\nX <- π[name](X)");
+    expect(norm(sql)).toContain("X AS");
+    expect(norm(sql)).toContain("X_v2 AS");
+    expect(norm(sql)).toContain("X_v3 AS");
+    expect(norm(sql)).toContain("SELECT * FROM X_v3");
   });
 });
