@@ -47,6 +47,7 @@ import sha256 from "crypto-js/sha256";
 import { format as formatFns } from "date-fns";
 import { toPng } from "html-to-image";
 import PrivacyNoticeToggle from "./PrivacyNoticeToggle";
+import LicenseDialog from "./LicenseDialog";
 import ThemeToggle from "./ThemeToggle";
 import useTheme from "./useTheme";
 import { isCorrectResult, Result } from "./utils";
@@ -1131,7 +1132,7 @@ function App() {
           <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-2 text-gray-600 dark:text-gray-400">
             <span>Copyright &copy; <a href="https://github.com/Edwinexd" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">Edwin Sundberg</a> {new Date().getFullYear()}</span>
             <span>-</span>
-            <a href="https://github.com/Edwinexd/sql-validator?tab=GPL-3.0-1-ov-file" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">GPL-3.0</a>
+            <LicenseDialog />
             <a href="https://github.com/Edwinexd/sql-validator/issues" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">Report Issue</a>
             <PrivacyNoticeToggle></PrivacyNoticeToggle>
           </div>
