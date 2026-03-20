@@ -1001,6 +1001,11 @@ function columnRefToSQL(ref: ColumnRef): string {
 
 let subqueryCounter = 0;
 
+/** Return a SQL alias for a node: use the table name for bare tables, otherwise _raN */
+function aliasFor(node: RANode): string {
+  return node.type === "table" ? node.name : `_ra${subqueryCounter++}`;
+}
+
 /**
  * Interface for a minimal database handle used to resolve column names.
  * Compatible with sql.js Database.
@@ -1048,6 +1053,32 @@ function resolveColumns(sql: string, db: DatabaseHandle): string[] {
     throw new RAError(msg);
   }
 }
+/** Ensure a node produces a full SELECT statement (needed for UNION/INTERSECT/EXCEPT) */
+function asSelect(node: RANode, db?: DatabaseHandle): string {
+  const sql = nodeToSQL(node, db);
+  // Bare table names need wrapping; anything starting with SELECT is already a query
+  return sql.trimStart().toUpperCase().startsWith("SELECT") ? sql : `SELECT * FROM ${sql}`;
+}
+
+/**
+ * Build a WHERE clause correlating two aliases on their common columns.
+ * Returns empty string if no db or no common columns found.
+ */
+function buildCorrelation(leftSQL: string, rightSQL: string, lAlias: string, rAlias: string, db?: DatabaseHandle): string {
+  if (!db) return "";
+  try {
+    const leftCols = resolveColumns(leftSQL, db);
+    const rightCols = resolveColumns(rightSQL, db);
+    const common = leftCols.filter(c => rightCols.includes(c));
+    if (common.length > 0) {
+      return " WHERE " + common.map(c => `${lAlias}.${c} = ${rAlias}.${c}`).join(" AND ");
+    }
+  } catch {
+    // If we can't resolve columns, fall back to uncorrelated
+  }
+  return "";
+}
+
 function nodeToSQL(node: RANode, db?: DatabaseHandle): string {
   switch (node.type) {
     case "table":
@@ -1090,7 +1121,7 @@ function nodeToSQL(node: RANode, db?: DatabaseHandle): string {
       return `SELECT DISTINCT * FROM (${nodeToSQL(node.relation, db)})`;
 
     case "crossProduct":
-      return `SELECT * FROM (${nodeToSQL(node.left, db)}) AS _ra${subqueryCounter++} CROSS JOIN (${nodeToSQL(node.right, db)}) AS _ra${subqueryCounter++}`;
+      return `SELECT * FROM (${nodeToSQL(node.left, db)}) AS ${aliasFor(node.left)} CROSS JOIN (${nodeToSQL(node.right, db)}) AS ${aliasFor(node.right)}`;
 
     case "naturalJoin": {
       const leftSQL = nodeToSQL(node.left, db);
@@ -1109,56 +1140,104 @@ function nodeToSQL(node: RANode, db?: DatabaseHandle): string {
           }
         }
       }
-      return `SELECT * FROM (${leftSQL}) AS _ra${subqueryCounter++} NATURAL JOIN (${rightSQL}) AS _ra${subqueryCounter++}`;
+      return `SELECT * FROM (${leftSQL}) AS ${aliasFor(node.left)} NATURAL JOIN (${rightSQL}) AS ${aliasFor(node.right)}`;
     }
 
     case "thetaJoin":
-      return `SELECT * FROM (${nodeToSQL(node.left, db)}) AS _ra${subqueryCounter++} JOIN (${nodeToSQL(node.right, db)}) AS _ra${subqueryCounter++} ON ${conditionToSQL(node.condition)}`;
+      return `SELECT * FROM (${nodeToSQL(node.left, db)}) AS ${aliasFor(node.left)} JOIN (${nodeToSQL(node.right, db)}) AS ${aliasFor(node.right)} ON ${conditionToSQL(node.condition)}`;
 
     case "leftJoin":
-      return `SELECT * FROM (${nodeToSQL(node.left, db)}) AS _ra${subqueryCounter++} LEFT JOIN (${nodeToSQL(node.right, db)}) AS _ra${subqueryCounter++} ON ${conditionToSQL(node.condition)}`;
+      return `SELECT * FROM (${nodeToSQL(node.left, db)}) AS ${aliasFor(node.left)} LEFT JOIN (${nodeToSQL(node.right, db)}) AS ${aliasFor(node.right)} ON ${conditionToSQL(node.condition)}`;
 
     case "rightJoin":
-      return `SELECT * FROM (${nodeToSQL(node.left, db)}) AS _ra${subqueryCounter++} RIGHT JOIN (${nodeToSQL(node.right, db)}) AS _ra${subqueryCounter++} ON ${conditionToSQL(node.condition)}`;
+      return `SELECT * FROM (${nodeToSQL(node.left, db)}) AS ${aliasFor(node.left)} RIGHT JOIN (${nodeToSQL(node.right, db)}) AS ${aliasFor(node.right)} ON ${conditionToSQL(node.condition)}`;
 
     case "fullJoin":
-      return `SELECT * FROM (${nodeToSQL(node.left, db)}) AS _ra${subqueryCounter++} FULL OUTER JOIN (${nodeToSQL(node.right, db)}) AS _ra${subqueryCounter++} ON ${conditionToSQL(node.condition)}`;
+      return `SELECT * FROM (${nodeToSQL(node.left, db)}) AS ${aliasFor(node.left)} FULL OUTER JOIN (${nodeToSQL(node.right, db)}) AS ${aliasFor(node.right)} ON ${conditionToSQL(node.condition)}`;
 
     case "leftSemiJoin": {
       const lAlias = `_ra${subqueryCounter++}`;
       const rAlias = `_ra${subqueryCounter++}`;
-      return `SELECT ${lAlias}.* FROM (${nodeToSQL(node.left, db)}) AS ${lAlias} WHERE EXISTS (SELECT 1 FROM (${nodeToSQL(node.right, db)}) AS ${rAlias})`;
+      const leftSQL = nodeToSQL(node.left, db);
+      const rightSQL = nodeToSQL(node.right, db);
+      const corr = buildCorrelation(leftSQL, rightSQL, lAlias, rAlias, db);
+      return `SELECT ${lAlias}.* FROM (${leftSQL}) AS ${lAlias} WHERE EXISTS (SELECT 1 FROM (${rightSQL}) AS ${rAlias}${corr})`;
     }
 
     case "rightSemiJoin": {
       const lAlias = `_ra${subqueryCounter++}`;
       const rAlias = `_ra${subqueryCounter++}`;
-      return `SELECT ${rAlias}.* FROM (${nodeToSQL(node.right, db)}) AS ${rAlias} WHERE EXISTS (SELECT 1 FROM (${nodeToSQL(node.left, db)}) AS ${lAlias})`;
+      const leftSQL = nodeToSQL(node.left, db);
+      const rightSQL = nodeToSQL(node.right, db);
+      // Outer relation is right; EXISTS checks left — correlate right (outer) with left (inner)
+      const corr = buildCorrelation(rightSQL, leftSQL, rAlias, lAlias, db);
+      return `SELECT ${rAlias}.* FROM (${rightSQL}) AS ${rAlias} WHERE EXISTS (SELECT 1 FROM (${leftSQL}) AS ${lAlias}${corr})`;
     }
 
     case "antiJoin": {
       const lAlias = `_ra${subqueryCounter++}`;
       const rAlias = `_ra${subqueryCounter++}`;
-      return `SELECT ${lAlias}.* FROM (${nodeToSQL(node.left, db)}) AS ${lAlias} WHERE NOT EXISTS (SELECT 1 FROM (${nodeToSQL(node.right, db)}) AS ${rAlias})`;
+      const leftSQL = nodeToSQL(node.left, db);
+      const rightSQL = nodeToSQL(node.right, db);
+      const corr = buildCorrelation(leftSQL, rightSQL, lAlias, rAlias, db);
+      return `SELECT ${lAlias}.* FROM (${leftSQL}) AS ${lAlias} WHERE NOT EXISTS (SELECT 1 FROM (${rightSQL}) AS ${rAlias}${corr})`;
     }
 
     case "union":
-      return `${nodeToSQL(node.left, db)} UNION ${nodeToSQL(node.right, db)}`;
-
     case "intersect":
-      return `${nodeToSQL(node.left, db)} INTERSECT ${nodeToSQL(node.right, db)}`;
-
-    case "difference":
-      return `${nodeToSQL(node.left, db)} EXCEPT ${nodeToSQL(node.right, db)}`;
+    case "difference": {
+      const leftSQL = asSelect(node.left, db);
+      const rightSQL = asSelect(node.right, db);
+      if (db) {
+        const leftCols = resolveColumns(leftSQL, db);
+        const rightCols = resolveColumns(rightSQL, db);
+        if (leftCols.length > 0 && rightCols.length > 0 && leftCols.length !== rightCols.length) {
+          const opName = node.type === "union" ? "Union (∪)" : node.type === "intersect" ? "Intersect (∩)" : "Difference (−)";
+          throw new RAError(
+            `${opName} requires both sides to have the same number of columns. ` +
+            `Left has ${leftCols.length} column(s): [${leftCols.join(", ")}], ` +
+            `right has ${rightCols.length} column(s): [${rightCols.join(", ")}].`
+          );
+        }
+      }
+      const sqlOp = node.type === "union" ? "UNION" : node.type === "intersect" ? "INTERSECT" : "EXCEPT";
+      return `${leftSQL} ${sqlOp} ${rightSQL}`;
+    }
 
     case "division": {
       const lAlias = `_ra${subqueryCounter++}`;
       const rAlias = `_ra${subqueryCounter++}`;
-      const crossAlias = `_ra${subqueryCounter++}`;
       const innerAlias = `_ra${subqueryCounter++}`;
       const leftSQL = nodeToSQL(node.left, db);
       const rightSQL = nodeToSQL(node.right, db);
-      return `SELECT * FROM (SELECT DISTINCT * FROM (${leftSQL}) AS ${lAlias}) AS ${innerAlias} WHERE NOT EXISTS (SELECT * FROM (${rightSQL}) AS ${rAlias} WHERE NOT EXISTS (SELECT * FROM (${leftSQL}) AS ${crossAlias}))`;
+
+      if (db) {
+        try {
+          const leftCols = resolveColumns(leftSQL, db);
+          const rightCols = resolveColumns(rightSQL, db);
+          const aOnlyCols = leftCols.filter(c => !rightCols.includes(c));
+          const bCols = rightCols;
+
+          if (aOnlyCols.length === 0) {
+            throw new RAError(
+              "Division requires the dividend to have columns not present in the divisor. " +
+              `Left columns: [${leftCols.join(", ")}], Right columns: [${rightCols.join(", ")}].`
+            );
+          }
+
+          const aOnlyMatch = aOnlyCols.map(c => `${innerAlias}.${c} = ${lAlias}.${c}`).join(" AND ");
+          const bMatch = bCols.map(c => `${innerAlias}.${c} = ${rAlias}.${c}`).join(" AND ");
+
+          const selectCols = aOnlyCols.map(c => `${lAlias}.${c}`).join(", ");
+          return `SELECT DISTINCT ${selectCols} FROM (${leftSQL}) AS ${lAlias} WHERE NOT EXISTS (SELECT 1 FROM (${rightSQL}) AS ${rAlias} WHERE NOT EXISTS (SELECT 1 FROM (${leftSQL}) AS ${innerAlias} WHERE ${aOnlyMatch} AND ${bMatch}))`;
+        } catch (e) {
+          if (e instanceof RAError) throw e;
+          // Fall through to no-db version
+        }
+      }
+
+      // Without db: best-effort uncorrelated version
+      return `SELECT * FROM (SELECT DISTINCT * FROM (${leftSQL}) AS ${lAlias}) AS ${innerAlias} WHERE NOT EXISTS (SELECT * FROM (${rightSQL}) AS ${rAlias} WHERE NOT EXISTS (SELECT * FROM (${leftSQL}) AS _ra${subqueryCounter++}))`;
     }
   }
 }
