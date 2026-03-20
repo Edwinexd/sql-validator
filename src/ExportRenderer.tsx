@@ -57,8 +57,8 @@ const ExportRenderer = React.forwardRef<HTMLDivElement, ExportRendererProps>(({ 
       }
       {query?.mode === "ra" ? (
         <div
-          className="font-serif text-xl w-full bg-slate-200 max-w-4xl min-h-40 my-2 p-3 rounded"
-          dangerouslySetInnerHTML={{ __html: renderRAPreview(query.code) }}
+          className="font-mono text-2xl text-left w-full bg-white text-gray-900 max-w-4xl min-h-40 my-2 p-3 rounded border border-gray-300"
+          dangerouslySetInnerHTML={{ __html: renderRAPreview(query.code, true) }}
         />
       ) : (
         <Editor

@@ -849,7 +849,7 @@ function App() {
       height: exportRenderer.clientHeight,
       pixelRatio: 1
     }).then((dataUrl) => {
-      triggerDownload(dataUrl, `validator_${question.id}_${question.category.display_number}${question.display_sequence}.png`);
+      triggerDownload(dataUrl, `validator_${editorMode === "ra" ? "ra_" : ""}${question.id}_${question.category.display_number}${question.display_sequence}.png`);
       setExportQuestion(undefined);
       setExportQuery(undefined);
       setExportingStatus(0);
@@ -938,7 +938,7 @@ function App() {
               value={editorMode === "ra" ? t("raPlaceholder") : t("selectQuestionComment")}
               disabled={true}
               onValueChange={_code => null}
-              highlight={code => editorMode === "ra" ? highlightRA(code) : highlight(code, languages.sql)}
+              highlight={code => editorMode === "ra" ? highlightRA(code, isDarkMode()) : highlight(code, languages.sql)}
               padding={10}
               tabSize={2}
               className="font-mono text-base w-full dark:bg-slate-800 bg-slate-100 min-h-32 rounded-md"
@@ -950,7 +950,7 @@ function App() {
               itemID="editor"
               value={query}
               onValueChange={code => setQuery(code)}
-              highlight={code => editorMode === "ra" ? highlightRA(code) : highlight(code, languages.sql)}
+              highlight={code => editorMode === "ra" ? highlightRA(code, isDarkMode()) : highlight(code, languages.sql)}
               padding={10}
               tabSize={2}
               className="font-mono text-base w-full dark:bg-slate-800 bg-slate-100 border dark:border-slate-600 border-gray-300 min-h-32 rounded-md"
