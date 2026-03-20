@@ -9,225 +9,188 @@ You may obtain a copy of the License in the LICENSE.md file in this repository.
 
 /**
  * Custom syntax highlighter for relational algebra expressions.
- * Returns HTML with subscript rendering for bracket content and
- * colored tokens for operators, keywords, strings, etc.
  *
- * IMPORTANT: This highlighter must preserve character count (each input char
- * maps to exactly one output char) for editor overlay alignment.
+ * INVARIANT: The visible text of the output must be EXACTLY the input string.
+ * Every input character must appear exactly once in the output. We only wrap
+ * characters in <span> tags for coloring — never skip, reorder, or add chars.
  */
 
 import {
   UNARY_SYMBOLS, BINARY_SYMBOLS, UNARY_KEYWORDS, BINARY_KEYWORDS,
-  LOGIC_KEYWORDS, IDENT_START, IDENT_CHAR,
-  esc, skipWs, highlightSubContent, extractBracketContent, extractImplicitSubscript,
+  LOGIC_KEYWORDS, IDENT_START, IDENT_CHAR, esc,
 } from "./raShared";
 
-// Inline styles for portability with the code editor
-const S = {
-  op: "color: #7c3aed; font-weight: bold;",
-  kw: "color: #7c3aed; font-weight: bold;",
-  logic: "color: #2563eb; font-weight: bold;",
+// Only color/opacity — never font-weight/size which affect character width
+const LIGHT = {
+  op: "color: #7c3aed;",
+  logic: "color: #2563eb;",
   str: "color: #059669;",
   num: "color: #d97706;",
   comment: "color: #9ca3af; font-style: italic;",
   bracket: "color: #a1a1aa; opacity: 0.5;",
-  assign: "color: #7c3aed; font-weight: bold;",
-  sub: "color: #c084fc; font-weight: 500;",
 };
 
-const subWrap = (type: string, text: string) =>
-  `<span style="${S[type as keyof typeof S] || S.sub}">${text}</span>`;
+const DARK = {
+  op: "color: #a78bfa;",
+  logic: "color: #60a5fa;",
+  str: "color: #34d399;",
+  num: "color: #fbbf24;",
+  comment: "color: #6b7280; font-style: italic;",
+  bracket: "color: #6b7280; opacity: 0.5;",
+};
 
 /**
- * Highlight a relational algebra expression, rendering bracket content
- * as subscripts and coloring operators/keywords.
+ * Wrap a raw substring in a styled span, escaping HTML entities.
+ * The visible text length is always === raw.length.
  */
-export function highlightRA(code: string): string {
+function span(style: string, raw: string): string {
+  return `<span style="${style}">${esc(raw)}</span>`;
+}
+
+/**
+ * Highlight RA code for the editor overlay.
+ * Simple token-coloring only — no rewriting, no subscript rendering.
+ * Character count is guaranteed correct by construction.
+ */
+export function highlightRA(code: string, dark = false): string {
+  const S = dark ? DARK : LIGHT;
   const result: string[] = [];
   let i = 0;
 
   while (i < code.length) {
-    // Comments: --
+    // ── Comments: -- until newline ──
     if (code[i] === "-" && i + 1 < code.length && code[i + 1] === "-") {
-      let comment = "";
-      while (i < code.length && code[i] !== "\n") {
-        comment += code[i];
-        i++;
-      }
-      result.push(`<span style="${S.comment}">${esc(comment)}</span>`);
+      let end = i;
+      while (end < code.length && code[end] !== "\n") end++;
+      result.push(span(S.comment, code.slice(i, end)));
+      i = end;
       continue;
     }
 
-    // Newlines — preserve them
+    // ── Newlines ──
     if (code[i] === "\n") {
       result.push("\n");
       i++;
       continue;
     }
 
-    // Unicode RA operators (single char)
+    // ── Unicode unary operators (σ, π, ρ, γ, τ, δ) ──
     if (UNARY_SYMBOLS.has(code[i])) {
-      result.push(`<span style="${S.op}">${esc(code[i])}</span>`);
+      result.push(span(S.op, code[i]));
       i++;
-      i = renderSubscript(code, i, result);
       continue;
     }
 
-    // |X| or |><| — natural join
+    // ── Unicode binary operators (×, ⋈, ∪, ∩, etc.) ──
+    if (BINARY_SYMBOLS.has(code[i])) {
+      result.push(span(S.op, code[i]));
+      i++;
+      continue;
+    }
+
+    // ── |X| or |><| natural join ──
     if (code[i] === "|") {
       if (i + 2 < code.length && (code[i + 1] === "X" || code[i + 1] === "x") && code[i + 2] === "|") {
-        result.push(`<span style="${S.op}">${esc("|X|")}</span>`);
+        result.push(span(S.op, code.slice(i, i + 3)));
         i += 3;
         continue;
       }
       if (i + 3 < code.length && code[i + 1] === ">" && code[i + 2] === "<" && code[i + 3] === "|") {
-        result.push(`<span style="${S.op}">${esc("|><|")}</span>`);
+        result.push(span(S.op, code.slice(i, i + 4)));
         i += 4;
         continue;
       }
     }
 
-    if (BINARY_SYMBOLS.has(code[i])) {
-      result.push(`<span style="${S.op}">${esc(code[i])}</span>`);
-      i++;
-      if (i < code.length && (code[i] === "[" || code[i] === "{" || code[i] === "_")) {
-        i = renderSubscript(code, i, result);
-      }
-      continue;
-    }
-
-    // Arrow: <- (assignment) — keep both chars for editor alignment
+    // ── <- assignment ──
     if (code[i] === "<" && i + 1 < code.length && code[i + 1] === "-") {
-      result.push(`<span style="${S.assign}">&lt;-</span>`);
+      result.push(span(S.op, "<-"));
       i += 2;
       continue;
     }
 
-    // Arrow: -> (rename) — keep both chars for editor alignment
+    // ── -> rename arrow ──
     if (code[i] === "-" && i + 1 < code.length && code[i + 1] === ">") {
-      result.push(`<span style="${S.op}">-&gt;</span>`);
+      result.push(span(S.op, "->"));
       i += 2;
       continue;
     }
 
-    // String literals
+    // ── → Unicode rename arrow ──
+    if (code[i] === "→") {
+      result.push(span(S.op, "→"));
+      i++;
+      continue;
+    }
+
+    // ── String literals ──
     if (code[i] === "'") {
-      let str = "'";
-      i++;
-      while (i < code.length && code[i] !== "'") {
-        str += code[i];
-        i++;
-      }
-      if (i < code.length) { str += "'"; i++; }
-      result.push(`<span style="${S.str}">${esc(str)}</span>`);
+      let end = i + 1;
+      while (end < code.length && code[end] !== "'") end++;
+      if (end < code.length) end++; // include closing quote
+      result.push(span(S.str, code.slice(i, end)));
+      i = end;
       continue;
     }
 
-    // Numbers
+    // ── Numbers ──
     if (/\d/.test(code[i])) {
-      let num = "";
-      while (i < code.length && /[\d.]/.test(code[i])) {
-        num += code[i];
-        i++;
-      }
-      result.push(`<span style="${S.num}">${esc(num)}</span>`);
+      let end = i;
+      while (end < code.length && /[\d.]/.test(code[end])) end++;
+      result.push(span(S.num, code.slice(i, end)));
+      i = end;
       continue;
     }
 
-    // Identifiers and keywords
-    if (IDENT_START.test(code[i])) {
-      let ident = "";
-      while (i < code.length && IDENT_CHAR.test(code[i])) {
-        ident += code[i];
-        i++;
-      }
-      const lower = ident.toLowerCase();
-      if (UNARY_KEYWORDS.has(lower)) {
-        result.push(`<span style="${S.kw}">${esc(ident)}</span>`);
-        i = renderSubscript(code, i, result);
-      } else if (BINARY_KEYWORDS.has(lower)) {
-        result.push(`<span style="${S.kw}">${esc(ident)}</span>`);
-        const j = skipWs(code, i);
-        if (j < code.length && (code[j] === "[" || code[j] === "{" || code[j] === "_")) {
-          if (j > i) result.push(esc(code.slice(i, j)));
-          i = renderSubscript(code, j, result);
-        }
-      } else if (LOGIC_KEYWORDS.has(lower)) {
-        result.push(`<span style="${S.logic}">${esc(ident)}</span>`);
-      } else {
-        result.push(esc(ident));
-      }
-      continue;
-    }
-
-    // Comparison operators
-    if (code[i] === "<" || code[i] === ">" || code[i] === "!" || code[i] === "=") {
-      let op = code[i];
+    // ── Brackets — render faintly ──
+    if (code[i] === "[" || code[i] === "]" || code[i] === "{" || code[i] === "}") {
+      result.push(span(S.bracket, code[i]));
       i++;
-      if (i < code.length && (code[i] === "=" || code[i] === ">")) {
-        op += code[i];
-        i++;
-      }
-      result.push(`<span style="${S.logic}">${esc(op)}</span>`);
       continue;
     }
 
-    // Everything else (whitespace, parens, etc.) — pass through
+    // ── Underscore before bracket — render as faint bracket prefix ──
+    if (code[i] === "_") {
+      // Check if this is a LaTeX-style _{} or _[] prefix
+      let j = i + 1;
+      while (j < code.length && code[j] === " ") j++;
+      if (j < code.length && (code[j] === "{" || code[j] === "[")) {
+        result.push(span(S.bracket, "_"));
+        i++;
+        continue;
+      }
+    }
+
+    // ── Identifiers and keywords ──
+    if (IDENT_START.test(code[i])) {
+      let end = i;
+      while (end < code.length && IDENT_CHAR.test(code[end])) end++;
+      const word = code.slice(i, end);
+      const lower = word.toLowerCase();
+      if (UNARY_KEYWORDS.has(lower) || BINARY_KEYWORDS.has(lower)) {
+        result.push(span(S.op, word));
+      } else if (LOGIC_KEYWORDS.has(lower)) {
+        result.push(span(S.logic, word));
+      } else {
+        result.push(esc(word));
+      }
+      i = end;
+      continue;
+    }
+
+    // ── Comparison operators ──
+    if ("<>!=".includes(code[i])) {
+      let end = i + 1;
+      if (end < code.length && (code[end] === "=" || code[end] === ">")) end++;
+      result.push(span(S.logic, code.slice(i, end)));
+      i = end;
+      continue;
+    }
+
+    // ── Everything else (spaces, parens, etc.) — pass through ──
     result.push(esc(code[i]));
     i++;
   }
 
   return result.join("");
-}
-
-/**
- * Render a subscript section after a unary/binary operator.
- * Handles: _{ }, [ ], { }, or implicit (content until '(').
- * Returns the new index position.
- */
-function renderSubscript(code: string, i: number, result: string[]): number {
-  const beforeWs = i;
-  i = skipWs(code, i);
-
-  if (i >= code.length) {
-    if (i > beforeWs) result.push(code.slice(beforeWs, i));
-    return i;
-  }
-
-  // Handle _{ or _[ (LaTeX-style)
-  if (code[i] === "_") {
-    result.push(`<span style="${S.bracket}">${esc("_")}</span>`);
-    i++;
-    i = skipWs(code, i);
-  }
-
-  // Try bracket content
-  if (code[i] === "[" || code[i] === "{") {
-    const openBracket = code[i];
-    result.push(`<span style="${S.bracket}">${esc(openBracket)}</span>`);
-    const [newI, content] = extractBracketContent(code, i);
-    if (content !== null) {
-      result.push(`<span style="${S.sub}">${highlightSubContent(content, subWrap)}</span>`);
-      // Render closing bracket (only if bracket was actually closed)
-      if (newI > i + 1 && newI <= code.length) {
-        const closeBracket = code[newI - 1];
-        if (closeBracket === "]" || closeBracket === "}") {
-          result.push(`<span style="${S.bracket}">${esc(closeBracket)}</span>`);
-        }
-      }
-      return newI;
-    }
-  }
-
-  // Implicit subscript
-  const [newI, content] = extractImplicitSubscript(code, i, beforeWs);
-  if (content !== null) {
-    result.push(code.slice(beforeWs, i)); // whitespace
-    result.push(`<span style="${S.sub}">${highlightSubContent(content, subWrap)}</span>`);
-    return newI;
-  }
-
-  // No subscript found — restore whitespace
-  if (i > beforeWs) result.push(code.slice(beforeWs, i));
-  return i;
 }
