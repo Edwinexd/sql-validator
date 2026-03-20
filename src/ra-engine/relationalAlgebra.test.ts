@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import initSqlJs from "sql.js";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import initSqlJs, { type Database } from "sql.js";
 import { raToSQL, RAError } from "./relationalAlgebra";
 
 // ─── Helper ─────────────────────────────────────────────────────────────────
@@ -280,6 +280,52 @@ describe("set operations", () => {
   it("should transpile backslash as set difference", () => {
     const sql = raToSQL("A \\ B");
     expect(norm(sql)).toContain("EXCEPT");
+  });
+
+  it("should generate valid SQL for bare table set operations", () => {
+    // Set ops need SELECT statements on both sides, not bare table names
+    const unionSql = norm(raToSQL("A union B"));
+    expect(unionSql).toMatch(/SELECT \* FROM A\s+UNION\s+SELECT \* FROM B/i);
+
+    const exceptSql = norm(raToSQL("A minus B"));
+    expect(exceptSql).toMatch(/SELECT \* FROM A\s+EXCEPT\s+SELECT \* FROM B/i);
+
+    const intersectSql = norm(raToSQL("A intersect B"));
+    expect(intersectSql).toMatch(/SELECT \* FROM A\s+INTERSECT\s+SELECT \* FROM B/i);
+  });
+
+  it("should handle set difference with hyphenated expression", () => {
+    const sql = raToSQL("PI[name, city](Person - Teacher)");
+    expect(norm(sql)).toContain("EXCEPT");
+    expect(norm(sql)).toContain("SELECT name, city");
+  });
+
+  it("should error on union-incompatible column counts when database is provided", async () => {
+    const SQL = await initSqlJs();
+    const db = new SQL.Database();
+    db.run("CREATE TABLE A (x INTEGER, y TEXT)");
+    db.run("CREATE TABLE B (x INTEGER, y TEXT, z TEXT)");
+
+    expect(() => raToSQL("A union B", db)).toThrow(RAError);
+    expect(() => raToSQL("A union B", db)).toThrow(/same number of columns/i);
+    expect(() => raToSQL("A minus B", db)).toThrow(RAError);
+    expect(() => raToSQL("A intersect B", db)).toThrow(RAError);
+
+    // Should NOT throw when column counts match
+    db.run("CREATE TABLE C (a INTEGER, b TEXT)");
+    expect(() => raToSQL("A union C", db)).not.toThrow();
+    db.close();
+  });
+
+  it("should include column names in union-incompatible error message", async () => {
+    const SQL = await initSqlJs();
+    const db = new SQL.Database();
+    db.run("CREATE TABLE R1 (name TEXT, city TEXT)");
+    db.run("CREATE TABLE R2 (name TEXT, city TEXT, age INTEGER)");
+
+    expect(() => raToSQL("R1 union R2", db)).toThrow(/Left has 2/);
+    expect(() => raToSQL("R1 union R2", db)).toThrow(/right has 3/);
+    db.close();
   });
 });
 
@@ -791,5 +837,578 @@ describe("implicit return from last assignment", () => {
     expect(norm(sql)).toContain("X_v2 AS");
     expect(norm(sql)).toContain("X_v3 AS");
     expect(norm(sql)).toContain("SELECT * FROM X_v3");
+  });
+});
+
+// ─── SQLite execution ──────────────────────────────────────────────────────
+// Every generated SQL statement must actually execute against a real database.
+
+describe("SQLite execution", () => {
+  let db: Database;
+
+  beforeAll(async () => {
+    const SQL = await initSqlJs();
+    db = new SQL.Database();
+    db.run(`
+      CREATE TABLE Person (id INTEGER PRIMARY KEY, name TEXT, age INTEGER, city TEXT);
+      INSERT INTO Person VALUES (1, 'Alice', 25, 'Stockholm');
+      INSERT INTO Person VALUES (2, 'Bob', 19, 'York');
+      INSERT INTO Person VALUES (3, 'Carol', 30, 'Bristol');
+
+      CREATE TABLE Student (id INTEGER PRIMARY KEY, hasDisability INTEGER);
+      INSERT INTO Student VALUES (1, 0);
+      INSERT INTO Student VALUES (2, 1);
+
+      CREATE TABLE Teacher (id INTEGER PRIMARY KEY, name TEXT, age INTEGER, city TEXT, department TEXT);
+      INSERT INTO Teacher VALUES (10, 'Dave', 45, 'Stockholm', 'CS');
+      INSERT INTO Teacher VALUES (11, 'Eve', 38, 'York', 'Math');
+
+      CREATE TABLE Course (course_id INTEGER PRIMARY KEY, title TEXT, credits INTEGER);
+      INSERT INTO Course VALUES (100, 'Databases', 7);
+      INSERT INTO Course VALUES (101, 'Algorithms', 5);
+
+      CREATE TABLE Enrollment (id INTEGER, course_id INTEGER);
+      INSERT INTO Enrollment VALUES (1, 100);
+      INSERT INTO Enrollment VALUES (1, 101);
+      INSERT INTO Enrollment VALUES (2, 100);
+    `);
+  });
+
+  afterAll(() => db.close());
+
+  /** Convert RA to SQL and execute, returning result rows */
+  function execRA(expr: string): initSqlJs.QueryExecResult[] {
+    const sql = raToSQL(expr, db);
+    return db.exec(sql);
+  }
+
+  // ── Selection ──
+
+  it("σ with condition", () => {
+    const res = execRA("σ[age > 20](Person)");
+    expect(res[0].values.length).toBe(2); // Alice (25) and Carol (30)
+  });
+
+  it("σ with string comparison", () => {
+    const res = execRA("σ[name = 'Alice'](Person)");
+    expect(res[0].values.length).toBe(1);
+    expect(res[0].values[0]).toContain("Alice");
+  });
+
+  it("σ with compound condition", () => {
+    const res = execRA("σ[age > 20 and city = 'Stockholm'](Person)");
+    expect(res[0].values.length).toBe(1);
+    expect(res[0].values[0]).toContain("Alice");
+  });
+
+  // ── Projection ──
+
+  it("π selects columns", () => {
+    const res = execRA("π[name, city](Person)");
+    expect(res[0].columns).toEqual(["name", "city"]);
+    expect(res[0].values.length).toBe(3);
+  });
+
+  // ── Rename ──
+
+  it("ρ renames columns", () => {
+    const res = execRA("ρ[name→fullName](Person)");
+    expect(res[0].columns).toContain("fullName");
+    expect(res[0].columns).not.toContain("name");
+  });
+
+  // ── Natural join ──
+
+  it("⋈ natural join", () => {
+    const res = execRA("Person ⋈ Student");
+    expect(res[0].values.length).toBe(2); // ids 1 and 2 match
+  });
+
+  it("natjoin keyword", () => {
+    const res = execRA("Person natjoin Student");
+    expect(res[0].values.length).toBe(2);
+  });
+
+  // ── Cross product ──
+
+  it("× cross product", () => {
+    const res = execRA("Person × Course");
+    expect(res[0].values.length).toBe(6); // 3 × 2
+  });
+
+  // ── Theta join ──
+
+  it("⋈[cond] theta join", () => {
+    // Use unqualified column names since the generator aliases tables as _raN
+    const res = execRA("Person ⋈[age > credits] Course");
+    expect(res[0].values.length).toBeGreaterThan(0);
+  });
+
+  // ── Set operations ──
+
+  it("∪ union", () => {
+    const res = execRA("π[name](Person) ∪ π[name](Teacher)");
+    expect(res[0].values.length).toBe(5); // 3 + 2, all distinct names
+  });
+
+  it("∩ intersect", () => {
+    // No overlapping names between Person and Teacher
+    const res = execRA("π[name](Person) ∩ π[name](Teacher)");
+    expect(res.length === 0 || res[0].values.length === 0).toBe(true);
+  });
+
+  it("− set difference", () => {
+    const res = execRA("π[name](Person) − π[name](Teacher)");
+    expect(res[0].values.length).toBe(3); // All Person names, none overlap
+  });
+
+  it("minus keyword", () => {
+    const res = execRA("π[name](Person) minus π[name](Teacher)");
+    expect(res[0].values.length).toBe(3);
+  });
+
+  it("bare table set difference (Person - Teacher)", () => {
+    // Person and Teacher are union-compatible (both have id, name, age, city)
+    // but Teacher has an extra column (department) — use projections
+    const res = execRA("π[id, name](Person) − π[id, name](Teacher)");
+    expect(res[0].values.length).toBe(3);
+  });
+
+  it("set difference with hyphen syntax", () => {
+    const res = execRA("π[name, city](Person) - π[name, city](Teacher)");
+    expect(res[0].values.length).toBeGreaterThan(0);
+  });
+
+  it("errors on union-incompatible set operations", () => {
+    // Person has 4 cols (id, name, age, city), Course has 3 cols (course_id, title, credits)
+    expect(() => execRA("Person union Course")).toThrow(RAError);
+    expect(() => execRA("Person union Course")).toThrow(/same number of columns/i);
+    expect(() => execRA("Person minus Course")).toThrow(RAError);
+    expect(() => execRA("Person intersect Course")).toThrow(RAError);
+  });
+
+  it("backslash set difference", () => {
+    const res = execRA("π[name](Person) \\ π[name](Teacher)");
+    expect(res[0].values.length).toBe(3);
+  });
+
+  // ── Outer joins ──
+
+  it("leftjoin", () => {
+    // Use unqualified column names since the generator aliases tables as _raN
+    const res = execRA("Person leftjoin[age > credits] Course");
+    expect(res[0].values.length).toBeGreaterThan(0);
+  });
+
+  // ── Semi-join ──
+
+  it("⋉ left semi-join returns only matching rows", () => {
+    const res = execRA("Person ⋉ Student");
+    // Person ids 1,2,3 — Student ids 1,2 — semi-join on common col "id"
+    expect(res[0].values.length).toBe(2);
+  });
+
+  // ── Anti-join ──
+
+  it("▷ anti-join returns only non-matching rows", () => {
+    const res = execRA("Person ▷ Student");
+    // Only Carol (id=3) has no matching Student row
+    expect(res[0].values.length).toBe(1);
+    expect(res[0].values[0]).toContain("Carol");
+  });
+
+  // ── Distinct ──
+
+  it("δ distinct", () => {
+    const res = execRA("δ(Person)");
+    expect(res[0].values.length).toBe(3);
+  });
+
+  // ── Sort ──
+
+  it("τ sort", () => {
+    const res = execRA("τ[name](Person)");
+    expect(res[0].values[0]).toContain("Alice");
+    expect(res[0].values[2]).toContain("Carol");
+  });
+
+  it("τ sort DESC", () => {
+    const res = execRA("τ[age DESC](Person)");
+    expect(res[0].values[0]).toContain("Carol"); // age 30, highest
+  });
+
+  // ── Grouping / aggregation ──
+
+  it("γ group by with COUNT", () => {
+    const res = execRA("γ[city; COUNT(id) AS cnt](Person)");
+    expect(res[0].columns).toContain("cnt");
+    expect(res[0].values.length).toBe(3); // 3 distinct cities
+  });
+
+  // ── Division ──
+
+  it("÷ division returns correct result", () => {
+    // Enrollment: (1,100),(1,101),(2,100) — Course: (100),(101)
+    // Only id=1 is enrolled in ALL courses
+    const res = execRA("π[id, course_id](Enrollment) ÷ π[course_id](Course)");
+    expect(res[0].values.length).toBe(1);
+    expect(res[0].values[0]).toContain(1); // id=1 (Alice)
+  });
+
+  // ── Composition / nesting ──
+
+  it("π of σ", () => {
+    const res = execRA("π[name](σ[age > 20](Person))");
+    expect(res[0].columns).toEqual(["name"]);
+    expect(res[0].values.length).toBe(2);
+  });
+
+  it("σ of ⋈", () => {
+    const res = execRA("σ[age > 20](Person ⋈ Student)");
+    expect(res[0].values.length).toBe(1); // Only Alice (25) matches
+  });
+
+  it("deeply nested", () => {
+    const res = execRA("π[name](σ[city = 'Stockholm'](Person ⋈ Student))");
+    expect(res[0].values.length).toBe(1);
+    expect(res[0].values[0]).toContain("Alice");
+  });
+
+  // ── Parenthesis-free syntax ──
+
+  it("σ[cond] Table without parens", () => {
+    const res = execRA("σ[age > 20] Person");
+    expect(res[0].values.length).toBe(2);
+  });
+
+  it("π[cols] σ[cond] Table chained", () => {
+    const res = execRA("π[name] σ[age > 20] Person");
+    expect(res[0].columns).toEqual(["name"]);
+    expect(res[0].values.length).toBe(2);
+  });
+
+  // ── Implicit subscripts ──
+
+  it("σ cond (R) implicit", () => {
+    const res = execRA("σ age > 20 (Person)");
+    expect(res[0].values.length).toBe(2);
+  });
+
+  it("π cols (R) implicit", () => {
+    const res = execRA("π name, city (Person)");
+    expect(res[0].columns).toEqual(["name", "city"]);
+  });
+
+  // ── Assignments ──
+
+  it("single assignment", () => {
+    const res = execRA("A ← σ[age > 20](Person)\nπ[name](A)");
+    expect(res[0].values.length).toBe(2);
+  });
+
+  it("multiple assignments", () => {
+    const res = execRA("A ← σ[city = 'Stockholm'](Person)\nB ← π[name](A)\nB");
+    expect(res[0].values.length).toBe(1);
+    expect(res[0].values[0]).toContain("Alice");
+  });
+
+  it("variable reassignment", () => {
+    const res = execRA("X ← Person\nX ← σ[age > 20](X)\nX ← π[name](X)");
+    expect(res[0].values.length).toBe(2);
+  });
+
+  // ── LaTeX-style curly braces ──
+
+  it("σ_{cond}(R)", () => {
+    const res = execRA("σ_{age > 20}(Person)");
+    expect(res[0].values.length).toBe(2);
+  });
+
+  it("π_{cols}(R)", () => {
+    const res = execRA("π_{name, city}(Person)");
+    expect(res[0].columns).toEqual(["name", "city"]);
+  });
+
+  it("ρ_{old→new}(R)", () => {
+    const res = execRA("ρ_{name→fullName}(Person)");
+    expect(res[0].columns).toContain("fullName");
+    expect(res[0].columns).not.toContain("name");
+  });
+
+  it("σ{cond}(R) without underscore", () => {
+    const res = execRA("σ{age > 20}(Person)");
+    expect(res[0].values.length).toBe(2);
+  });
+
+  it("⋈{cond} theta join with curly braces", () => {
+    const res = execRA("Person ⋈{age > credits} Course");
+    expect(res[0].values.length).toBeGreaterThan(0);
+  });
+
+  // ── Selection edge cases ──
+
+  it("σ with OR condition", () => {
+    const res = execRA("σ[city = 'Stockholm' or city = 'York'](Person)");
+    expect(res[0].values.length).toBe(2); // Alice and Bob
+  });
+
+  it("σ with NOT condition", () => {
+    const res = execRA("σ[not age > 20](Person)");
+    expect(res[0].values.length).toBe(1); // Only Bob (19)
+    expect(res[0].values[0]).toContain("Bob");
+  });
+
+  it("σ with nested OR and AND", () => {
+    const res = execRA("σ[age > 20 or (name = 'Bob' and city = 'York')](Person)");
+    expect(res[0].values.length).toBe(3); // Alice, Bob, Carol
+  });
+
+  it("σ with all comparison operators", () => {
+    expect(execRA("σ[age = 25](Person)")[0].values.length).toBe(1);
+    expect(execRA("σ[age <> 25](Person)")[0].values.length).toBe(2);
+    expect(execRA("σ[age != 25](Person)")[0].values.length).toBe(2);
+    expect(execRA("σ[age < 25](Person)")[0].values.length).toBe(1);
+    expect(execRA("σ[age > 25](Person)")[0].values.length).toBe(1);
+    expect(execRA("σ[age <= 25](Person)")[0].values.length).toBe(2);
+    expect(execRA("σ[age >= 25](Person)")[0].values.length).toBe(2);
+  });
+
+  it("σ with table.column references", () => {
+    const res = execRA("σ[Person.age > 20](Person)");
+    expect(res[0].values.length).toBe(2);
+  });
+
+  // ── Rename edge cases ──
+
+  it("ρ with multiple rename mappings", () => {
+    const res = execRA("ρ[name→fullName, age→years](Person)");
+    expect(res[0].columns).toContain("fullName");
+    expect(res[0].columns).toContain("years");
+    expect(res[0].columns).not.toContain("name");
+    expect(res[0].columns).not.toContain("age");
+    expect(res[0].values.length).toBe(3);
+  });
+
+  it("ρ with ASCII arrow", () => {
+    const res = execRA("rho[name->fullName](Person)");
+    expect(res[0].columns).toContain("fullName");
+  });
+
+  // ── Outer joins ──
+
+  it("rightjoin", () => {
+    const res = execRA("Student rightjoin[age > hasDisability] Person");
+    expect(res[0].values.length).toBeGreaterThan(0);
+  });
+
+  it("fulljoin", () => {
+    const res = execRA("Person fulljoin[age > credits] Course");
+    expect(res[0].values.length).toBeGreaterThan(0);
+  });
+
+  it("⟕ left outer join with Unicode", () => {
+    const res = execRA("Person ⟕[age > credits] Course");
+    expect(res[0].values.length).toBeGreaterThan(0);
+  });
+
+  it("left join preserves non-matching rows", () => {
+    // Carol (age 30) has no Student row — left join should keep her with NULLs
+    const res = execRA("Person leftjoin[Person.id = Student.id] Student");
+    expect(res[0].values.length).toBe(3); // All 3 Person rows
+  });
+
+  // ── Semi-join edge cases ──
+
+  it("⋊ right semi-join", () => {
+    const res = execRA("Student ⋊ Person");
+    // Student ids 1,2 both exist in Person — all Student rows match
+    expect(res[0].values.length).toBe(2);
+  });
+
+  it("rightsemijoin keyword", () => {
+    const res = execRA("Student rightsemijoin Person");
+    expect(res[0].values.length).toBe(2);
+  });
+
+  it("leftsemijoin keyword", () => {
+    const res = execRA("Person leftsemijoin Student");
+    expect(res[0].values.length).toBe(2);
+  });
+
+  it("antijoin keyword", () => {
+    const res = execRA("Person antijoin Student");
+    expect(res[0].values.length).toBe(1);
+    expect(res[0].values[0]).toContain("Carol");
+  });
+
+  // ── Sort edge cases ──
+
+  it("τ with multiple sort columns", () => {
+    const res = execRA("τ[city, age DESC](Person)");
+    // Bristol(30), Stockholm(25), York(19)
+    expect(res[0].values[0]).toContain("Carol");   // Bristol
+    expect(res[0].values[1]).toContain("Alice");   // Stockholm
+    expect(res[0].values[2]).toContain("Bob");     // York
+  });
+
+  it("sort keyword", () => {
+    const res = execRA("sort[name](Person)");
+    expect(res[0].values[0]).toContain("Alice");
+    expect(res[0].values[2]).toContain("Carol");
+  });
+
+  // ── Aggregation edge cases ──
+
+  it("γ with SUM", () => {
+    const res = execRA("γ[city; SUM(age) AS totalAge](Person)");
+    expect(res[0].columns).toContain("totalAge");
+    expect(res[0].values.length).toBe(3);
+  });
+
+  it("γ with AVG", () => {
+    const res = execRA("γ[city; AVG(age) AS avgAge](Person)");
+    expect(res[0].columns).toContain("avgAge");
+    expect(res[0].values.length).toBe(3);
+  });
+
+  it("γ with MIN and MAX", () => {
+    const res = execRA("γ[city; MIN(age) AS youngest, MAX(age) AS oldest](Person)");
+    expect(res[0].columns).toContain("youngest");
+    expect(res[0].columns).toContain("oldest");
+  });
+
+  it("γ COUNT without alias", () => {
+    const res = execRA("γ[city; COUNT(id)](Person)");
+    expect(res[0].values.length).toBe(3);
+  });
+
+  it("gamma keyword", () => {
+    const res = execRA("gamma[city; COUNT(id) AS cnt](Person)");
+    expect(res[0].columns).toContain("cnt");
+  });
+
+  // ── Distinct edge cases ──
+
+  it("delta keyword", () => {
+    const res = execRA("delta(Person)");
+    expect(res[0].values.length).toBe(3);
+  });
+
+  it("distinct keyword", () => {
+    const res = execRA("distinct(Person)");
+    expect(res[0].values.length).toBe(3);
+  });
+
+  it("δ without parens", () => {
+    const res = execRA("δ Person");
+    expect(res[0].values.length).toBe(3);
+  });
+
+  // ── Keyword variants for operators ──
+
+  it("select keyword", () => {
+    const res = execRA("select[age > 20](Person)");
+    expect(res[0].values.length).toBe(2);
+  });
+
+  it("project keyword", () => {
+    const res = execRA("project[name, city](Person)");
+    expect(res[0].columns).toEqual(["name", "city"]);
+  });
+
+  it("cross keyword", () => {
+    const res = execRA("Person cross Course");
+    expect(res[0].values.length).toBe(6);
+  });
+
+  it("join keyword with condition", () => {
+    const res = execRA("Person join[age > credits] Course");
+    expect(res[0].values.length).toBeGreaterThan(0);
+  });
+
+  it("|X| as natural join", () => {
+    const res = execRA("Person |X| Student");
+    expect(res[0].values.length).toBe(2);
+  });
+
+  it("|><| as natural join", () => {
+    const res = execRA("Person |><| Student");
+    expect(res[0].values.length).toBe(2);
+  });
+
+  it("intersect keyword", () => {
+    const res = execRA("π[name](Person) intersect π[name](Teacher)");
+    expect(res.length === 0 || res[0].values.length === 0).toBe(true);
+  });
+
+  it("divide keyword", () => {
+    const res = execRA("π[id, course_id](Enrollment) divide π[course_id](Course)");
+    expect(res[0].values.length).toBe(1);
+    expect(res[0].values[0]).toContain(1);
+  });
+
+  // ── Implicit subscripts edge cases ──
+
+  it("ρ old→new (R) implicit", () => {
+    const res = execRA("ρ name→fullName (Person)");
+    expect(res[0].columns).toContain("fullName");
+  });
+
+  it("τ col (R) implicit", () => {
+    const res = execRA("τ name (Person)");
+    expect(res[0].values[0]).toContain("Alice");
+  });
+
+  it("σ compound implicit with AND", () => {
+    const res = execRA("σ age > 20 and city = 'Stockholm' (Person)");
+    expect(res[0].values.length).toBe(1);
+    expect(res[0].values[0]).toContain("Alice");
+  });
+
+  it("nested implicit subscripts", () => {
+    const res = execRA("π name (σ age > 20 (Person))");
+    expect(res[0].columns).toEqual(["name"]);
+    expect(res[0].values.length).toBe(2);
+  });
+
+  // ── Parenthesis-free edge cases ──
+
+  it("triple chain without parens", () => {
+    const res = execRA("π[name] σ[age > 20] δ Person");
+    expect(res[0].columns).toEqual(["name"]);
+    expect(res[0].values.length).toBe(2);
+  });
+
+  it("π[cols] over union with parens", () => {
+    const res = execRA("π[name] (π[name](Person) ∪ π[name](Teacher))");
+    expect(res[0].values.length).toBe(5);
+  });
+
+  // ── Assignment edge cases ──
+
+  it("assignment with <- ASCII arrow", () => {
+    const res = execRA("A <- σ[age > 20](Person)\nπ[name](A)");
+    expect(res[0].values.length).toBe(2);
+  });
+
+  it("semicolons as statement separators", () => {
+    const res = execRA("A ← Person; π[name](A)");
+    expect(res[0].values.length).toBe(3);
+  });
+
+  it("comments in multi-line input", () => {
+    const res = execRA("-- Get adults\nA ← σ[age > 20](Person)\n-- Project names\nπ[name](A)");
+    expect(res[0].values.length).toBe(2);
+  });
+
+  it("implicit return from last assignment", () => {
+    const res = execRA("A ← σ[age > 20](Person)");
+    expect(res[0].values.length).toBe(2);
+  });
+
+  it("complex pipeline with reassignment", () => {
+    const res = execRA("X ← Person ⋈ Student\nX ← σ[age > 20](X)\nX ← π[name](X)");
+    expect(res[0].values.length).toBe(1);
+    expect(res[0].values[0]).toContain("Alice");
   });
 });

@@ -208,10 +208,12 @@ function renderSubscript(code: string, i: number, result: string[]): number {
     const [newI, content] = extractBracketContent(code, i);
     if (content !== null) {
       result.push(`<span style="${S.sub}">${highlightSubContent(content, subWrap)}</span>`);
-      // Render closing bracket
-      if (newI > i + 1) {
+      // Render closing bracket (only if bracket was actually closed)
+      if (newI > i + 1 && newI <= code.length) {
         const closeBracket = code[newI - 1];
-        result.push(`<span style="${S.bracket}">${esc(closeBracket)}</span>`);
+        if (closeBracket === "]" || closeBracket === "}") {
+          result.push(`<span style="${S.bracket}">${esc(closeBracket)}</span>`);
+        }
       }
       return newI;
     }
