@@ -1,5 +1,3 @@
-import "prismjs/components/prism-sql";
-import "prismjs/themes/prism.css";
 import React from "react";
 import { Upload, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";

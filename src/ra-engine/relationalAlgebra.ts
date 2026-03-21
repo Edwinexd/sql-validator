@@ -7,6 +7,8 @@ you may not use this file except in compliance with the License.
 You may obtain a copy of the License in the LICENSE.md file in this repository.
 */
 
+import type { DatabaseEngine } from "../database/types";
+
 // ─── Token Types ────────────────────────────────────────────────────────────
 
 enum TokenType {
@@ -1007,55 +1009,27 @@ function aliasFor(node: RANode): string {
 }
 
 /**
- * Interface for a minimal database handle used to resolve column names.
- * Compatible with sql.js Database.
- */
-interface DatabaseHandle {
-  exec(sql: string): { columns: string[]; values: unknown[][] }[];
-  prepare(sql: string): { step(): boolean; getColumnNames(): string[]; free(): void };
-}
-
-/**
  * Resolve the column names produced by a SQL expression using the database.
- * Uses prepare() to get column metadata without executing the query.
+ * Uses db.getColumnNames() which handles both SQLite and PostgreSQL internally.
  */
-function resolveColumns(sql: string, db: DatabaseHandle): string[] {
-  // For bare table names, use PRAGMA table_info which always works
-  if (/^\w+$/.test(sql.trim())) {
-    const tableName = sql.trim();
-    try {
-      const res = db.exec(`PRAGMA table_info(${tableName})`);
-      if (res.length > 0 && res[0].values.length > 0) {
-        // PRAGMA table_info returns rows with [cid, name, type, notnull, dflt_value, pk]
-        return res[0].values.map((row: unknown[]) => String(row[1]));
-      }
-    } catch {
-      // Table doesn't exist
-    }
-    throw new RAError(`Table '${tableName}' does not exist`);
-  }
-
-  // For complex expressions, use prepare to get column names
+async function resolveColumns(sql: string, db: DatabaseEngine): Promise<string[]> {
   try {
-    const probeSQL = `SELECT * FROM (${sql}) LIMIT 0`;
-    const stmt = db.prepare(probeSQL);
-    // Step once to initialize column metadata (required by some sql.js versions)
-    stmt.step();
-    const cols = stmt.getColumnNames();
-    stmt.free();
-    return cols;
+    return await db.getColumnNames(sql);
   } catch (e) {
     const msg = (e as Error).message || String(e);
     if (/no such table/i.test(msg)) {
       const match = msg.match(/no such table:\s*(\S+)/i);
       throw new RAError(match ? `Table '${match[1]}' does not exist` : msg);
     }
+    if (/does not exist/i.test(msg) || /not found/i.test(msg)) {
+      throw new RAError(msg);
+    }
     throw new RAError(msg);
   }
 }
 /** Ensure a node produces a full SELECT statement (needed for UNION/INTERSECT/EXCEPT) */
-function asSelect(node: RANode, db?: DatabaseHandle): string {
-  const sql = nodeToSQL(node, db);
+async function asSelect(node: RANode, db?: DatabaseEngine): Promise<string> {
+  const sql = await nodeToSQL(node, db);
   // Bare table names need wrapping; anything starting with SELECT is already a query
   return sql.trimStart().toUpperCase().startsWith("SELECT") ? sql : `SELECT * FROM ${sql}`;
 }
@@ -1064,11 +1038,11 @@ function asSelect(node: RANode, db?: DatabaseHandle): string {
  * Build a WHERE clause correlating two aliases on their common columns.
  * Returns empty string if no db or no common columns found.
  */
-function buildCorrelation(leftSQL: string, rightSQL: string, lAlias: string, rAlias: string, db?: DatabaseHandle): string {
+async function buildCorrelation(leftSQL: string, rightSQL: string, lAlias: string, rAlias: string, db?: DatabaseEngine): Promise<string> {
   if (!db) return "";
   try {
-    const leftCols = resolveColumns(leftSQL, db);
-    const rightCols = resolveColumns(rightSQL, db);
+    const leftCols = await resolveColumns(leftSQL, db);
+    const rightCols = await resolveColumns(rightSQL, db);
     const common = leftCols.filter(c => rightCols.includes(c));
     if (common.length > 0) {
       return " WHERE " + common.map(c => `${lAlias}.${c} = ${rAlias}.${c}`).join(" AND ");
@@ -1079,26 +1053,26 @@ function buildCorrelation(leftSQL: string, rightSQL: string, lAlias: string, rAl
   return "";
 }
 
-function nodeToSQL(node: RANode, db?: DatabaseHandle): string {
+async function nodeToSQL(node: RANode, db?: DatabaseEngine): Promise<string> {
   switch (node.type) {
     case "table":
       return node.name;
 
     case "selection":
-      return `SELECT * FROM (${nodeToSQL(node.relation, db)}) WHERE ${conditionToSQL(node.condition)}`;
+      return `SELECT * FROM (${await nodeToSQL(node.relation, db)}) WHERE ${conditionToSQL(node.condition)}`;
 
     case "projection":
-      return `SELECT ${node.columns.map(columnRefToSQL).join(", ")} FROM (${nodeToSQL(node.relation, db)})`;
+      return `SELECT ${node.columns.map(columnRefToSQL).join(", ")} FROM (${await nodeToSQL(node.relation, db)})`;
 
     case "rename": {
-      const inner = nodeToSQL(node.relation, db);
+      const inner = await nodeToSQL(node.relation, db);
       // Simple case: rename columns
       const colMappings = node.mappings.map(m => `${m.from} AS ${m.to}`).join(", ");
       return `SELECT ${colMappings} FROM (${inner})`;
     }
 
     case "group": {
-      const inner = nodeToSQL(node.relation, db);
+      const inner = await nodeToSQL(node.relation, db);
       const groupCols = node.groupBy.map(columnRefToSQL);
       const aggExprs = node.aggregates.map(a => {
         const expr = `${a.func}(${columnRefToSQL(a.column)})`;
@@ -1110,7 +1084,7 @@ function nodeToSQL(node: RANode, db?: DatabaseHandle): string {
     }
 
     case "sort": {
-      const inner = nodeToSQL(node.relation, db);
+      const inner = await nodeToSQL(node.relation, db);
       const orderParts = node.columns.map(c =>
         `${columnRefToSQL(c.column)}${c.desc ? " DESC" : ""}`
       ).join(", ");
@@ -1118,17 +1092,17 @@ function nodeToSQL(node: RANode, db?: DatabaseHandle): string {
     }
 
     case "distinct":
-      return `SELECT DISTINCT * FROM (${nodeToSQL(node.relation, db)})`;
+      return `SELECT DISTINCT * FROM (${await nodeToSQL(node.relation, db)})`;
 
     case "crossProduct":
-      return `SELECT * FROM (${nodeToSQL(node.left, db)}) AS ${aliasFor(node.left)} CROSS JOIN (${nodeToSQL(node.right, db)}) AS ${aliasFor(node.right)}`;
+      return `SELECT * FROM (${await nodeToSQL(node.left, db)}) AS ${aliasFor(node.left)} CROSS JOIN (${await nodeToSQL(node.right, db)}) AS ${aliasFor(node.right)}`;
 
     case "naturalJoin": {
-      const leftSQL = nodeToSQL(node.left, db);
-      const rightSQL = nodeToSQL(node.right, db);
+      const leftSQL = await nodeToSQL(node.left, db);
+      const rightSQL = await nodeToSQL(node.right, db);
       if (db) {
-        const leftCols = resolveColumns(leftSQL, db);
-        const rightCols = resolveColumns(rightSQL, db);
+        const leftCols = await resolveColumns(leftSQL, db);
+        const rightCols = await resolveColumns(rightSQL, db);
         if (leftCols.length > 0 && rightCols.length > 0) {
           const common = leftCols.filter(c => rightCols.includes(c));
           if (common.length === 0) {
@@ -1144,53 +1118,53 @@ function nodeToSQL(node: RANode, db?: DatabaseHandle): string {
     }
 
     case "thetaJoin":
-      return `SELECT * FROM (${nodeToSQL(node.left, db)}) AS ${aliasFor(node.left)} JOIN (${nodeToSQL(node.right, db)}) AS ${aliasFor(node.right)} ON ${conditionToSQL(node.condition)}`;
+      return `SELECT * FROM (${await nodeToSQL(node.left, db)}) AS ${aliasFor(node.left)} JOIN (${await nodeToSQL(node.right, db)}) AS ${aliasFor(node.right)} ON ${conditionToSQL(node.condition)}`;
 
     case "leftJoin":
-      return `SELECT * FROM (${nodeToSQL(node.left, db)}) AS ${aliasFor(node.left)} LEFT JOIN (${nodeToSQL(node.right, db)}) AS ${aliasFor(node.right)} ON ${conditionToSQL(node.condition)}`;
+      return `SELECT * FROM (${await nodeToSQL(node.left, db)}) AS ${aliasFor(node.left)} LEFT JOIN (${await nodeToSQL(node.right, db)}) AS ${aliasFor(node.right)} ON ${conditionToSQL(node.condition)}`;
 
     case "rightJoin":
-      return `SELECT * FROM (${nodeToSQL(node.left, db)}) AS ${aliasFor(node.left)} RIGHT JOIN (${nodeToSQL(node.right, db)}) AS ${aliasFor(node.right)} ON ${conditionToSQL(node.condition)}`;
+      return `SELECT * FROM (${await nodeToSQL(node.left, db)}) AS ${aliasFor(node.left)} RIGHT JOIN (${await nodeToSQL(node.right, db)}) AS ${aliasFor(node.right)} ON ${conditionToSQL(node.condition)}`;
 
     case "fullJoin":
-      return `SELECT * FROM (${nodeToSQL(node.left, db)}) AS ${aliasFor(node.left)} FULL OUTER JOIN (${nodeToSQL(node.right, db)}) AS ${aliasFor(node.right)} ON ${conditionToSQL(node.condition)}`;
+      return `SELECT * FROM (${await nodeToSQL(node.left, db)}) AS ${aliasFor(node.left)} FULL OUTER JOIN (${await nodeToSQL(node.right, db)}) AS ${aliasFor(node.right)} ON ${conditionToSQL(node.condition)}`;
 
     case "leftSemiJoin": {
       const lAlias = `_ra${subqueryCounter++}`;
       const rAlias = `_ra${subqueryCounter++}`;
-      const leftSQL = nodeToSQL(node.left, db);
-      const rightSQL = nodeToSQL(node.right, db);
-      const corr = buildCorrelation(leftSQL, rightSQL, lAlias, rAlias, db);
+      const leftSQL = await nodeToSQL(node.left, db);
+      const rightSQL = await nodeToSQL(node.right, db);
+      const corr = await buildCorrelation(leftSQL, rightSQL, lAlias, rAlias, db);
       return `SELECT ${lAlias}.* FROM (${leftSQL}) AS ${lAlias} WHERE EXISTS (SELECT 1 FROM (${rightSQL}) AS ${rAlias}${corr})`;
     }
 
     case "rightSemiJoin": {
       const lAlias = `_ra${subqueryCounter++}`;
       const rAlias = `_ra${subqueryCounter++}`;
-      const leftSQL = nodeToSQL(node.left, db);
-      const rightSQL = nodeToSQL(node.right, db);
+      const leftSQL = await nodeToSQL(node.left, db);
+      const rightSQL = await nodeToSQL(node.right, db);
       // Outer relation is right; EXISTS checks left — correlate right (outer) with left (inner)
-      const corr = buildCorrelation(rightSQL, leftSQL, rAlias, lAlias, db);
+      const corr = await buildCorrelation(rightSQL, leftSQL, rAlias, lAlias, db);
       return `SELECT ${rAlias}.* FROM (${rightSQL}) AS ${rAlias} WHERE EXISTS (SELECT 1 FROM (${leftSQL}) AS ${lAlias}${corr})`;
     }
 
     case "antiJoin": {
       const lAlias = `_ra${subqueryCounter++}`;
       const rAlias = `_ra${subqueryCounter++}`;
-      const leftSQL = nodeToSQL(node.left, db);
-      const rightSQL = nodeToSQL(node.right, db);
-      const corr = buildCorrelation(leftSQL, rightSQL, lAlias, rAlias, db);
+      const leftSQL = await nodeToSQL(node.left, db);
+      const rightSQL = await nodeToSQL(node.right, db);
+      const corr = await buildCorrelation(leftSQL, rightSQL, lAlias, rAlias, db);
       return `SELECT ${lAlias}.* FROM (${leftSQL}) AS ${lAlias} WHERE NOT EXISTS (SELECT 1 FROM (${rightSQL}) AS ${rAlias}${corr})`;
     }
 
     case "union":
     case "intersect":
     case "difference": {
-      const leftSQL = asSelect(node.left, db);
-      const rightSQL = asSelect(node.right, db);
+      const leftSQL = await asSelect(node.left, db);
+      const rightSQL = await asSelect(node.right, db);
       if (db) {
-        const leftCols = resolveColumns(leftSQL, db);
-        const rightCols = resolveColumns(rightSQL, db);
+        const leftCols = await resolveColumns(leftSQL, db);
+        const rightCols = await resolveColumns(rightSQL, db);
         if (leftCols.length > 0 && rightCols.length > 0 && leftCols.length !== rightCols.length) {
           const opName = node.type === "union" ? "Union (∪)" : node.type === "intersect" ? "Intersect (∩)" : "Difference (−)";
           throw new RAError(
@@ -1208,13 +1182,13 @@ function nodeToSQL(node: RANode, db?: DatabaseHandle): string {
       const lAlias = `_ra${subqueryCounter++}`;
       const rAlias = `_ra${subqueryCounter++}`;
       const innerAlias = `_ra${subqueryCounter++}`;
-      const leftSQL = nodeToSQL(node.left, db);
-      const rightSQL = nodeToSQL(node.right, db);
+      const leftSQL = await nodeToSQL(node.left, db);
+      const rightSQL = await nodeToSQL(node.right, db);
 
       if (db) {
         try {
-          const leftCols = resolveColumns(leftSQL, db);
-          const rightCols = resolveColumns(rightSQL, db);
+          const leftCols = await resolveColumns(leftSQL, db);
+          const rightCols = await resolveColumns(rightSQL, db);
           const aOnlyCols = leftCols.filter(c => !rightCols.includes(c));
           const bCols = rightCols;
 
@@ -1283,9 +1257,9 @@ function rewriteTableRefs(node: RANode, nameMap: Record<string, string>): RANode
   }
 }
 
-function programToSQL(program: RAProgram, db?: DatabaseHandle): string {
+async function programToSQL(program: RAProgram, db?: DatabaseEngine): Promise<string> {
   if (program.assignments.length === 0) {
-    return nodeToSQL(program.result, db);
+    return await nodeToSQL(program.result, db);
   }
 
   // Use CTEs (WITH clauses) for assignments.
@@ -1305,7 +1279,7 @@ function programToSQL(program: RAProgram, db?: DatabaseHandle): string {
 
     // Rewrite the expression: replace table references with their current CTE aliases
     const rewrittenExpr = rewriteTableRefs(a.expr, nameMap);
-    const sql = nodeToSQL(rewrittenExpr, db);
+    const sql = await nodeToSQL(rewrittenExpr, db);
     const wrappedSQL = /^\w+$/.test(sql) ? `SELECT * FROM ${sql}` : sql;
 
     // Determine the CTE name for this assignment
@@ -1318,7 +1292,7 @@ function programToSQL(program: RAProgram, db?: DatabaseHandle): string {
 
   // Rewrite the result expression with final name mappings
   const rewrittenResult = rewriteTableRefs(program.result, nameMap);
-  const resultSQL = nodeToSQL(rewrittenResult, db);
+  const resultSQL = await nodeToSQL(rewrittenResult, db);
   const wrappedResult = /^\w+$/.test(resultSQL) ? `SELECT * FROM ${resultSQL}` : resultSQL;
 
   if (ctes.length === 0) {
@@ -1364,12 +1338,12 @@ function programToSQL(program: RAProgram, db?: DatabaseHandle): string {
  * @returns The equivalent SQL query string
  * @throws RAError if the expression cannot be parsed or a natural join has no common columns
  */
-export function raToSQL(input: string, db?: DatabaseHandle): string {
+export async function raToSQL(input: string, db?: DatabaseEngine): Promise<string> {
   subqueryCounter = 0;
   const tokens = tokenize(input);
   const parser = new Parser(tokens);
   const program = parser.parse();
-  return programToSQL(program, db);
+  return await programToSQL(program, db);
 }
 
 // Re-export for potential future use (e.g., AST visualization)
