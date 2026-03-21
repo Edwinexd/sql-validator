@@ -94,6 +94,17 @@ export interface OracleQuestion {
    * these alternatives are only used for validation.
    */
   alternativeQueries?: string[];
+  /**
+   * PostgreSQL-specific reference query, using the same placeholder format.
+   * Used instead of `query` when generating for a PostgreSQL-engine language.
+   * Only needed when the query differs from the SQLite version (e.g. EXTRACT vs YEAR).
+   */
+  pgQuery?: string;
+  /**
+   * PostgreSQL-specific alternative queries.
+   * Falls back to `alternativeQueries` if not provided.
+   */
+  pgAlternativeQueries?: string[];
 }
 
 export interface OracleData {

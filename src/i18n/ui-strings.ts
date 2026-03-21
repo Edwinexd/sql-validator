@@ -110,6 +110,11 @@ export const uiStrings: Record<string, Record<string, string>> = {
     raNoteAssignment: "Sista tilldelningen returneras automatiskt",
     raConditions: "Villkor",
     raNoteComparison: "Jämförelseoperatorer: = <> < > <= >=",
+    editorSettings: "Editorinställningar",
+    settingAutocomplete: "Autokomplettering",
+    settingLineNumbers: "Radnummer",
+    settingHighlightActiveLine: "Markera aktiv rad",
+    sqlReferencePostgresql: "PostgreSQL-dokumentation",
   },
 
   en: {
@@ -218,5 +223,10 @@ export const uiStrings: Record<string, Record<string, string>> = {
     raNoteAssignment: "Last assignment is returned automatically",
     raConditions: "Conditions",
     raNoteComparison: "Comparison operators: = <> < > <= >=",
+    editorSettings: "Editor Settings",
+    settingAutocomplete: "Autocomplete",
+    settingLineNumbers: "Line Numbers",
+    settingHighlightActiveLine: "Highlight Active Line",
+    sqlReferencePostgresql: "PostgreSQL Documentation",
   },
 };
