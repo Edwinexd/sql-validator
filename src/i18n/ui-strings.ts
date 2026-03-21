@@ -115,6 +115,7 @@ export const uiStrings: Record<string, Record<string, string>> = {
     settingLineNumbers: "Radnummer",
     settingHighlightActiveLine: "Markera aktiv rad",
     sqlReferencePostgresql: "PostgreSQL-dokumentation",
+    engineMismatchWarning: "Varning: Denna sparfil skapades med en annan databasmotor ({{fileEngine}}). Import kan orsaka problem.",
   },
 
   en: {
@@ -228,5 +229,6 @@ export const uiStrings: Record<string, Record<string, string>> = {
     settingLineNumbers: "Line Numbers",
     settingHighlightActiveLine: "Highlight Active Line",
     sqlReferencePostgresql: "PostgreSQL Documentation",
+    engineMismatchWarning: "Warning: This save file was created with a different database engine ({{fileEngine}}). Importing may cause issues.",
   },
 };

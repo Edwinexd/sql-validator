@@ -592,11 +592,14 @@ function App() {
 
     output += "/* --- BEGIN Metadata --- */\n";
     output += "/* --- BEGIN Save Format Version --- */\n";
-    output += "-- 3\n";
+    output += "-- 4\n";
     output += "/* --- END Save Format Version --- */\n";
     output += "/* --- BEGIN Save Language --- */\n";
     output += `-- ${lang}\n`;
     output += "/* --- END Save Language --- */\n";
+    output += "/* --- BEGIN Save Engine --- */\n";
+    output += `-- ${engine}\n`;
+    output += "/* --- END Save Engine --- */\n";
     output += "/* --- END Metadata --- */\n";
 
     output += "/* --- BEGIN Validation --- */\n";
@@ -704,7 +707,7 @@ function App() {
     const a = document.createElement("a");
     const formattedTimestamp = formatFns(new Date(), "yyyyMMdd_HHmm");
     a.href = url;
-    a.download = `validator_${lang}_${formattedTimestamp}.sql`;;
+    a.download = `validator_${lang}_${engine}_${formattedTimestamp}.sql`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -768,7 +771,7 @@ function App() {
         }
         const parsed = parseImportFile(data);
         setPendingImportData(parsed);
-        const local = getLocalData(lang);
+        const local = getLocalData(lang, engine);
         const analysis = detectConflicts(local, parsed);
         importDialogRef.current?.open(analysis);
       };
