@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { AVAILABLE_LANGUAGES, DEFAULT_LANGUAGE } from "./languages";
+import { AVAILABLE_LANGUAGES, DEFAULT_LANGUAGE, type EngineType } from "./languages";
 import { uiStrings } from "./ui-strings";
 
 export interface QuestionCategory {
@@ -20,6 +20,9 @@ export interface QuestionCategory {
   }>;
 }
 
+/** Database data: ArrayBuffer for SQLite, string (SQL dump) for PostgreSQL */
+export type DbData = ArrayBuffer | string;
+
 interface LanguageContextValue {
   /** Current language code */
   lang: string;
@@ -29,28 +32,44 @@ interface LanguageContextValue {
   t: (key: string, params?: Record<string, string | number>) => string;
   /** The question pool for the current language */
   questions: QuestionCategory[];
-  /** The database ArrayBuffer for the current language */
-  dbArrayBuffer: ArrayBuffer | null;
+  /** The database data for the current language + engine */
+  dbData: DbData | null;
   /** Default query for the current language */
   defaultQuery: string;
+  /** Current database engine */
+  engine: EngineType;
+  /** Switch engine */
+  setEngine: (engine: EngineType) => void;
 }
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
+const DEFAULT_ENGINE: EngineType = "sqlite";
+
 function getInitialLanguage(): string {
-  // 1. URL parameter
   const urlParams = new URLSearchParams(window.location.search);
   const urlLang = urlParams.get("lang");
   if (urlLang && AVAILABLE_LANGUAGES.some(l => l.code === urlLang)) {
     return urlLang;
   }
-  // 2. localStorage
   const stored = localStorage.getItem("language");
   if (stored && AVAILABLE_LANGUAGES.some(l => l.code === stored)) {
     return stored;
   }
-  // 3. Default
   return DEFAULT_LANGUAGE;
+}
+
+function getInitialEngine(): EngineType {
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlEngine = urlParams.get("engine");
+  if (urlEngine === "postgresql" || urlEngine === "sqlite") {
+    return urlEngine;
+  }
+  const stored = localStorage.getItem("engine");
+  if (stored === "postgresql" || stored === "sqlite") {
+    return stored;
+  }
+  return DEFAULT_ENGINE;
 }
 
 function updateUrlParam(key: string, value: string | null) {
@@ -71,21 +90,34 @@ export function setUrlParam(key: string, value: string | null) {
   updateUrlParam(key, value);
 }
 
+/**
+ * Returns the data directory path for a language + engine combination.
+ * SQLite data lives under /languages/{code}/
+ * PostgreSQL data lives under /languages/{code}-pg/
+ */
+function dataPath(langCode: string, engine: EngineType): string {
+  return engine === "postgresql" ? `/languages/${langCode}-pg` : `/languages/${langCode}`;
+}
+
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [lang, setLangState] = useState(getInitialLanguage);
+  const [engine, setEngineState] = useState<EngineType>(getInitialEngine);
   const [questions, setQuestions] = useState<QuestionCategory[]>([]);
-  const [dbArrayBuffer, setDbArrayBuffer] = useState<ArrayBuffer | null>(null);
+  const [dbData, setDbData] = useState<DbData | null>(null);
   const [defaultQuery, setDefaultQuery] = useState("SELECT * FROM Student;");
 
-  const loadLanguageData = useCallback(async (langCode: string) => {
+  const loadLanguageData = useCallback(async (langCode: string, engineType: EngineType) => {
+    const base = dataPath(langCode, engineType);
+    const dataFile = engineType === "postgresql" ? "data.sql" : "data.sqlite3";
+
     try {
       const [qpResponse, dbResponse] = await Promise.all([
-        fetch(`/languages/${langCode}/questionpool.json`),
-        fetch(`/languages/${langCode}/data.sqlite3`),
+        fetch(`${base}/questionpool.json`),
+        fetch(`${base}/${dataFile}`),
       ]);
 
       if (!qpResponse.ok || !dbResponse.ok) {
-        console.error(`Failed to load language data for ${langCode}`);
+        console.error(`Failed to load language data for ${langCode} (${engineType})`);
         return;
       }
 
@@ -93,18 +125,23 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setQuestions(qpData.questions);
       setDefaultQuery(qpData.defaultQuery || "SELECT * FROM Student;");
 
-      const dbData = await dbResponse.arrayBuffer();
-      setDbArrayBuffer(dbData);
+      if (engineType === "postgresql") {
+        const sqlText = await dbResponse.text();
+        setDbData(sqlText);
+      } else {
+        const arrayBuf = await dbResponse.arrayBuffer();
+        setDbData(arrayBuf);
+      }
     } catch (e) {
       console.error("Failed to load language data:", e);
     }
   }, []);
 
   useEffect(() => {
-    loadLanguageData(lang);
-    // Always reflect language in URL (even default)
+    loadLanguageData(lang, engine);
     updateUrlParam("lang", lang);
-  }, [lang, loadLanguageData]);
+    updateUrlParam("engine", engine === DEFAULT_ENGINE ? null : engine);
+  }, [lang, engine, loadLanguageData]);
 
   const setLang = useCallback((newLang: string) => {
     if (!AVAILABLE_LANGUAGES.some(l => l.code === newLang)) return;
@@ -113,8 +150,15 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setLangState(newLang);
   }, []);
 
+  const setEngine = useCallback((newEngine: EngineType) => {
+    localStorage.setItem("engine", newEngine);
+    updateUrlParam("engine", newEngine === DEFAULT_ENGINE ? null : newEngine);
+    setEngineState(newEngine);
+  }, []);
+
   const t = useCallback((key: string, params?: Record<string, string | number>): string => {
-    const strings = uiStrings[lang] || uiStrings[DEFAULT_LANGUAGE] || {};
+    const baseLang = lang.replace(/-pg$/, "");
+    const strings = uiStrings[lang] || uiStrings[baseLang] || uiStrings[DEFAULT_LANGUAGE] || {};
     let value = strings[key] || key;
     if (params) {
       for (const [k, v] of Object.entries(params)) {
@@ -125,7 +169,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [lang]);
 
   return (
-    <LanguageContext.Provider value={{ lang, setLang, t, questions, dbArrayBuffer, defaultQuery }}>
+    <LanguageContext.Provider value={{ lang, setLang, t, questions, dbData, defaultQuery, engine, setEngine }}>
       {children}
     </LanguageContext.Provider>
   );

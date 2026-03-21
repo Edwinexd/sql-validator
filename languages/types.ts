@@ -39,6 +39,8 @@ export interface LanguageDefinition {
   code: string;
   /** Display name in the language itself, e.g. "Svenska", "English" */
   displayName: string;
+  /** Database engine: "sqlite" (default) or "postgresql" */
+  engine?: "sqlite" | "postgresql";
 
   // ── Data: Names ──────────────────────────────────────────────
   /** First names pool (min 15, indexed by canonical person slot) */

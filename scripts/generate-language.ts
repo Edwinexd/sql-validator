@@ -1,5 +1,8 @@
 /**
- * Language generator: produces per-language questionpool.json and data.sqlite3.
+ * Language generator: produces per-language questionpool.json and database data files.
+ *
+ * For SQLite-engine languages: outputs data.sqlite3 (binary).
+ * For PostgreSQL-engine languages: outputs data.sql (text dump).
  *
  * Usage: npx tsx scripts/generate-language.ts --lang <code> [--password <pw> | --plain]
  *   or:  npx tsx scripts/generate-language.ts --all [--password <pw> | --plain]
@@ -88,12 +91,11 @@ function getPersonAddress(lang: LanguageDefinition, personIndex: number): string
   return `${lang.streets[person.streetIndex]} ${person.streetSuffix}`;
 }
 
-// ── SQL generation ─────────────────────────────────────────────
+// ── SQL generation (SQLite) ─────────────────────────────────────
 function generateCreateTableSQL(lang: LanguageDefinition): string {
   const t = lang.tables;
   const c = lang.columns;
 
-  // We need to reproduce the exact same schema structure with translated names
   const statements: string[] = [];
 
   // Person
@@ -118,6 +120,41 @@ function generateCreateTableSQL(lang: LanguageDefinition): string {
 
   // Participation
   statements.push(`CREATE TABLE ${t.Participation} (${c.Participation.student} TEXT NOT NULL, ${c.Participation.course} TEXT NOT NULL, ${c.Participation.startDate} TEXT NOT NULL, CONSTRAINT DELTAGANDE_PK PRIMARY KEY (${c.Participation.course}, ${c.Participation.startDate}, ${c.Participation.student}), CONSTRAINT FK_Deltagande_Kurstillfälle FOREIGN KEY (${c.Participation.course}, ${c.Participation.startDate}) REFERENCES ${t.CourseInstance} (${c.CourseInstance.course}, ${c.CourseInstance.startDate}) ON DELETE RESTRICT ON UPDATE CASCADE, CONSTRAINT FK_Deltagande_Student FOREIGN KEY (${c.Participation.student}) REFERENCES ${t.Student} (${c.Student.id}) ON DELETE RESTRICT ON UPDATE CASCADE);`);
+
+  return statements.join("\n");
+}
+
+// ── SQL generation (PostgreSQL) ─────────────────────────────────
+function generateCreateTablePgSQL(lang: LanguageDefinition): string {
+  const t = lang.tables;
+  const c = lang.columns;
+
+  // No double-quoting: PG lowercases unquoted identifiers, which matches how
+  // oracle queries reference tables/columns (also unquoted).
+  const statements: string[] = [];
+
+  // Person
+  statements.push(`CREATE TABLE ${t.Person} (${c.Person.id} TEXT NOT NULL, ${c.Person.name} TEXT NOT NULL, ${c.Person.address} TEXT NOT NULL, ${c.Person.postalCode} TEXT NOT NULL, ${c.Person.city} TEXT NOT NULL, ${c.Person.phone} TEXT NOT NULL, PRIMARY KEY (${c.Person.id}));`);
+
+  // Room
+  statements.push(`CREATE TABLE ${t.Room} (${c.Room.id} INTEGER NOT NULL, ${c.Room.name} TEXT NOT NULL, ${c.Room.capacity} INTEGER NOT NULL, PRIMARY KEY (${c.Room.id}));`);
+  statements.push(`CREATE UNIQUE INDEX rum_namn ON ${t.Room} (${c.Room.name});`);
+
+  // Student — hasDisability uses BOOLEAN
+  statements.push(`CREATE TABLE ${t.Student} (${c.Student.id} TEXT NOT NULL, ${c.Student.hasDisability} BOOLEAN NOT NULL, CONSTRAINT STUDENT_PK PRIMARY KEY (${c.Student.id}), CONSTRAINT Student_Person_FK FOREIGN KEY (${c.Student.id}) REFERENCES ${t.Person} (${c.Person.id}) ON DELETE RESTRICT ON UPDATE CASCADE);`);
+
+  // Teacher
+  statements.push(`CREATE TABLE ${t.Teacher} (${c.Teacher.id} TEXT NOT NULL, ${c.Teacher.officeRoom} INTEGER NOT NULL, CONSTRAINT teacher_pk PRIMARY KEY (${c.Teacher.id}), CONSTRAINT fk_teacher_person FOREIGN KEY (${c.Teacher.id}) REFERENCES ${t.Person} (${c.Person.id}) ON DELETE RESTRICT ON UPDATE CASCADE);`);
+
+  // Course
+  statements.push(`CREATE TABLE ${t.Course} (${c.Course.code} TEXT NOT NULL, ${c.Course.name} TEXT NOT NULL, ${c.Course.duration} INTEGER NOT NULL, ${c.Course.price} INTEGER NOT NULL, ${c.Course.description} TEXT NOT NULL, PRIMARY KEY (${c.Course.code}));`);
+  statements.push(`CREATE UNIQUE INDEX kurs_ben ON ${t.Course} (${c.Course.name});`);
+
+  // CourseInstance — startDate uses DATE
+  statements.push(`CREATE TABLE ${t.CourseInstance} (${c.CourseInstance.course} TEXT NOT NULL, ${c.CourseInstance.startDate} DATE NOT NULL, ${c.CourseInstance.teacher} TEXT NOT NULL, ${c.CourseInstance.room} INTEGER NOT NULL, CONSTRAINT courseinstance_pk PRIMARY KEY (${c.CourseInstance.course}, ${c.CourseInstance.startDate}), CONSTRAINT fk_courseinstance_course FOREIGN KEY (${c.CourseInstance.course}) REFERENCES ${t.Course} (${c.Course.code}) ON DELETE RESTRICT ON UPDATE CASCADE, CONSTRAINT fk_courseinstance_teacher FOREIGN KEY (${c.CourseInstance.teacher}) REFERENCES ${t.Teacher} (${c.Teacher.id}) ON DELETE RESTRICT ON UPDATE CASCADE, CONSTRAINT fk_courseinstance_room FOREIGN KEY (${c.CourseInstance.room}) REFERENCES ${t.Room} (${c.Room.id}) ON DELETE RESTRICT ON UPDATE CASCADE);`);
+
+  // Participation — startDate uses DATE
+  statements.push(`CREATE TABLE ${t.Participation} (${c.Participation.student} TEXT NOT NULL, ${c.Participation.course} TEXT NOT NULL, ${c.Participation.startDate} DATE NOT NULL, CONSTRAINT participation_pk PRIMARY KEY (${c.Participation.course}, ${c.Participation.startDate}, ${c.Participation.student}), CONSTRAINT fk_participation_courseinstance FOREIGN KEY (${c.Participation.course}, ${c.Participation.startDate}) REFERENCES ${t.CourseInstance} (${c.CourseInstance.course}, ${c.CourseInstance.startDate}) ON DELETE RESTRICT ON UPDATE CASCADE, CONSTRAINT fk_participation_student FOREIGN KEY (${c.Participation.student}) REFERENCES ${t.Student} (${c.Student.id}) ON DELETE RESTRICT ON UPDATE CASCADE);`);
 
   return statements.join("\n");
 }
@@ -181,6 +218,65 @@ function generateInsertSQL(lang: LanguageDefinition): string {
   return statements.join("\n");
 }
 
+function generateInsertPgSQL(lang: LanguageDefinition): string {
+  const t = lang.tables;
+  const esc = (s: string) => s.replace(/'/g, "''");
+  const statements: string[] = [];
+
+  // Persons
+  for (let i = 0; i < oracle.persons.length; i++) {
+    const p = oracle.persons[i];
+    const name = getPersonName(lang, i);
+    const address = getPersonAddress(lang, i);
+    statements.push(`INSERT INTO ${t.Person} VALUES ('${esc(lang.personIds[i])}', '${esc(name)}', '${esc(address)}', '${esc(lang.postalCodes[i])}', '${esc(lang.cities[p.cityIndex])}', '${esc(lang.phones[i])}');`);
+  }
+
+  // Rooms
+  for (let i = 0; i < oracle.rooms.length; i++) {
+    const r = oracle.rooms[i];
+    statements.push(`INSERT INTO ${t.Room} VALUES (${r.id}, '${esc(lang.roomNames[i])}', ${r.capacity});`);
+  }
+
+  // Students — BOOLEAN values
+  for (let i = 0; i < oracle.persons.length; i++) {
+    const p = oracle.persons[i];
+    if (p.isStudent) {
+      statements.push(`INSERT INTO ${t.Student} VALUES ('${esc(lang.personIds[i])}', ${p.disability ? "TRUE" : "FALSE"});`);
+    }
+  }
+
+  // Teachers
+  for (let i = 0; i < oracle.persons.length; i++) {
+    const p = oracle.persons[i];
+    if (p.isTeacher) {
+      statements.push(`INSERT INTO ${t.Teacher} VALUES ('${esc(lang.personIds[i])}', ${p.officeRoom});`);
+    }
+  }
+
+  // Courses
+  for (let i = 0; i < oracle.courses.length; i++) {
+    const cr = oracle.courses[i];
+    const key = cr.key as keyof typeof lang.courseCodes;
+    statements.push(`INSERT INTO ${t.Course} VALUES ('${esc(lang.courseCodes[key])}', '${esc(lang.courseNames[key])}', ${cr.duration}, ${cr.price}, '${esc(lang.courseDescriptions[key])}');`);
+  }
+
+  // Course Instances — DATE values
+  for (const ci of oracle.courseInstances) {
+    const courseKey = oracle.courses[ci.courseIndex].key as keyof typeof lang.courseCodes;
+    const teacherId = lang.personIds[ci.teacherPersonIndex];
+    statements.push(`INSERT INTO ${t.CourseInstance} VALUES ('${esc(lang.courseCodes[courseKey])}', '${esc(ci.startDate)}', '${esc(teacherId)}', ${oracle.rooms[ci.roomIndex].id});`);
+  }
+
+  // Participations — DATE values
+  for (const p of oracle.participations) {
+    const courseKey = oracle.courses[p.courseIndex].key as keyof typeof lang.courseCodes;
+    const studentId = lang.personIds[p.studentPersonIndex];
+    statements.push(`INSERT INTO ${t.Participation} VALUES ('${esc(studentId)}', '${esc(lang.courseCodes[courseKey])}', '${esc(p.startDate)}');`);
+  }
+
+  return statements.join("\n");
+}
+
 // ── Query template resolution ──────────────────────────────────
 function resolveQuery(template: string, lang: LanguageDefinition): string {
   return template.replace(/\{\{(\w+):([^}]+)\}\}/g, (_, type: string, ref: string) => {
@@ -219,20 +315,18 @@ function resolveQuery(template: string, lang: LanguageDefinition): string {
   });
 }
 
-// ── Generate a single language ────────────────────────────────
+// ── Generate: SQLite ────────────────────────────────────────────
 type ResultData = { columns: string[]; values: (string | number | null)[][] };
 
-async function generateForLanguage(code: string, SQL: SqlJsStatic): Promise<boolean> {
-  const lang = await loadLanguage(code);
-  console.log(`Generating language data for: ${lang.displayName} (${lang.code})`);
+async function generateSqliteLanguage(lang: LanguageDefinition, SQL: SqlJsStatic): Promise<boolean> {
+  console.log(`Generating SQLite data for: ${lang.displayName} (${lang.code})`);
 
   const db = new SQL.Database();
 
-  // Create schema and insert data
   const createSQL = generateCreateTableSQL(lang);
   const insertSQL = generateInsertSQL(lang);
 
-  db.run("PRAGMA foreign_keys = OFF;"); // OFF during bulk insert for performance
+  db.run("PRAGMA foreign_keys = OFF;");
   for (const stmt of createSQL.split(";\n").filter(s => s.trim())) {
     db.run(stmt + ";");
   }
@@ -241,31 +335,14 @@ async function generateForLanguage(code: string, SQL: SqlJsStatic): Promise<bool
   }
   db.run("PRAGMA foreign_keys = ON;");
 
-  // Register custom functions needed by some queries
   db.create_function("YEAR", (date: string) => new Date(date).getFullYear());
   db.create_function("MONTH", (date: string) => new Date(date).getMonth() + 1);
   db.create_function("DAY", (date: string) => new Date(date).getDate());
-
-  // Build question pool by running reference queries
-  const categoryMap = new Map<number, {
-    category_id: number;
-    display_number: number;
-    questions: Array<{
-      id: number;
-      description: string;
-      display_sequence: string;
-      result: ResultData;
-      alternative_results?: ResultData[];
-    }>;
-  }>();
-
-  let errorCount = 0;
 
   function runQuery(queryTemplate: string): ResultData {
     const resolvedQuery = resolveQuery(queryTemplate, lang);
     const res = db.exec(resolvedQuery);
     if (res.length > 0) {
-      // Replace expression column names (e.g. "COUNT(student)") with the language's aggregate label
       const columns = res[0].columns.map(col =>
         /[()]/.test(col) ? lang.aggregateLabel : col
       );
@@ -274,9 +351,93 @@ async function generateForLanguage(code: string, SQL: SqlJsStatic): Promise<bool
     return { columns: [], values: [] };
   }
 
+  const { categories, errorCount } = buildQuestionPool(lang, runQuery);
+
+  const outputDir = join(__dirname, "..", "public", "languages", lang.code);
+  if (!existsSync(outputDir)) mkdirSync(outputDir, { recursive: true });
+
+  writeQuestionPool(outputDir, lang, categories, errorCount);
+
+  // Database binary
+  const dbData = db.export();
+  writeFileSync(join(outputDir, "data.sqlite3"), Buffer.from(dbData));
+  console.log(`Wrote data.sqlite3 (${dbData.length} bytes)`);
+
+  db.close();
+  return errorCount === 0;
+}
+
+// ── Generate: PostgreSQL ────────────────────────────────────────
+async function generatePgLanguage(lang: LanguageDefinition, outputCode: string): Promise<boolean> {
+  console.log(`Generating PostgreSQL data for: ${lang.displayName} (${outputCode})`);
+
+  const { PGlite } = await import("@electric-sql/pglite");
+  const db = new PGlite();
+
+  const createSQL = generateCreateTablePgSQL(lang);
+  const insertSQL = generateInsertPgSQL(lang);
+
+  const fullSQL = createSQL + "\n" + insertSQL;
+  await db.exec(fullSQL);
+
+  async function runQueryAsync(queryTemplate: string): Promise<ResultData> {
+    const resolvedQuery = resolveQuery(queryTemplate, lang);
+    const res = await db.query(resolvedQuery);
+    if (res.rows.length > 0 || res.fields.length > 0) {
+      const columns = res.fields.map(f =>
+        /[()]/.test(f.name) ? lang.aggregateLabel : f.name
+      );
+      const values = res.rows.map(row => {
+        return columns.map((_, i) => {
+          const val = (row as Record<string, unknown>)[res.fields[i].name];
+          if (val instanceof Date) return val.toISOString().split("T")[0];
+          if (typeof val === "boolean") return val ? 1 : 0;
+          if (val === null || val === undefined) return null;
+          return val as string | number;
+        });
+      });
+      return { columns, values };
+    }
+    return { columns: [], values: [] };
+  }
+
+  const { categories, errorCount } = await buildQuestionPoolAsync(lang, runQueryAsync);
+
+  const outputDir = join(__dirname, "..", "public", "languages", outputCode);
+  if (!existsSync(outputDir)) mkdirSync(outputDir, { recursive: true });
+
+  writeQuestionPool(outputDir, lang, categories, errorCount, "postgresql");
+
+  // SQL dump file
+  writeFileSync(join(outputDir, "data.sql"), fullSQL, "utf-8");
+  console.log(`Wrote data.sql (${fullSQL.length} bytes)`);
+
+  await db.close();
+  return errorCount === 0;
+}
+
+// ── Shared question pool building ──────────────────────────────
+interface CategoryEntry {
+  category_id: number;
+  display_number: number;
+  questions: Array<{
+    id: number;
+    description: string;
+    display_sequence: string;
+    result: ResultData;
+    alternative_results?: ResultData[];
+  }>;
+}
+
+function buildQuestionPool(
+  lang: LanguageDefinition,
+  runQuery: (template: string) => ResultData,
+): { categories: CategoryEntry[]; errorCount: number } {
+  const categoryMap = new Map<number, CategoryEntry>();
+  let errorCount = 0;
+
   for (const q of oracle.questions) {
     const description = lang.questionDescriptions[q.id];
-
     if (!description) {
       console.error(`Missing question description for Q${q.id} in language ${lang.code}`);
       errorCount++;
@@ -293,7 +454,6 @@ async function generateForLanguage(code: string, SQL: SqlJsStatic): Promise<bool
       continue;
     }
 
-    // Run alternative queries if present
     let alternative_results: ResultData[] | undefined;
     if (q.alternativeQueries && q.alternativeQueries.length > 0) {
       alternative_results = [];
@@ -302,13 +462,10 @@ async function generateForLanguage(code: string, SQL: SqlJsStatic): Promise<bool
           alternative_results.push(runQuery(q.alternativeQueries[i]));
         } catch (e) {
           console.error(`Error running alternative query ${i + 1} for Q${q.id}: ${(e as Error).message}`);
-          console.error(`  Resolved query: ${resolveQuery(q.alternativeQueries[i], lang)}`);
           errorCount++;
         }
       }
-      if (alternative_results.length === 0) {
-        alternative_results = undefined;
-      }
+      if (alternative_results.length === 0) alternative_results = undefined;
     }
 
     if (!categoryMap.has(q.categoryId)) {
@@ -328,26 +485,92 @@ async function generateForLanguage(code: string, SQL: SqlJsStatic): Promise<bool
     });
   }
 
-  if (errorCount > 0) {
-    console.error(`\n${errorCount} error(s) occurred. Generated data may be incomplete.`);
-  }
-
-  // Sort categories and questions
-  const categories = Array.from(categoryMap.values())
-    .sort((a, b) => a.category_id - b.category_id);
+  const categories = Array.from(categoryMap.values()).sort((a, b) => a.category_id - b.category_id);
   for (const cat of categories) {
     cat.questions.sort((a, b) => a.display_sequence.localeCompare(b.display_sequence));
   }
 
-  // Write output
-  const outputDir = join(__dirname, "..", "public", "languages", code);
-  if (!existsSync(outputDir)) {
-    mkdirSync(outputDir, { recursive: true });
+  return { categories, errorCount };
+}
+
+async function buildQuestionPoolAsync(
+  lang: LanguageDefinition,
+  runQuery: (template: string) => Promise<ResultData>,
+  isPg = true,
+): Promise<{ categories: CategoryEntry[]; errorCount: number }> {
+  const categoryMap = new Map<number, CategoryEntry>();
+  let errorCount = 0;
+
+  for (const q of oracle.questions) {
+    const description = lang.questionDescriptions[q.id];
+    if (!description) {
+      console.error(`Missing question description for Q${q.id} in language ${lang.code}`);
+      errorCount++;
+      continue;
+    }
+
+    const queryTemplate = (isPg && q.pgQuery) ? q.pgQuery : q.query;
+    let result: ResultData;
+    try {
+      result = await runQuery(queryTemplate);
+    } catch (e) {
+      console.error(`Error running query for Q${q.id}: ${(e as Error).message}`);
+      console.error(`  Resolved query: ${resolveQuery(queryTemplate, lang)}`);
+      errorCount++;
+      continue;
+    }
+
+    const altQueries = (isPg && q.pgAlternativeQueries) ? q.pgAlternativeQueries : q.alternativeQueries;
+    let alternative_results: ResultData[] | undefined;
+    if (altQueries && altQueries.length > 0) {
+      alternative_results = [];
+      for (let i = 0; i < altQueries.length; i++) {
+        try {
+          alternative_results.push(await runQuery(altQueries[i]));
+        } catch (e) {
+          console.error(`Error running alternative query ${i + 1} for Q${q.id}: ${(e as Error).message}`);
+          errorCount++;
+        }
+      }
+      if (alternative_results.length === 0) alternative_results = undefined;
+    }
+
+    if (!categoryMap.has(q.categoryId)) {
+      categoryMap.set(q.categoryId, {
+        category_id: q.categoryId,
+        display_number: q.displayNumber,
+        questions: [],
+      });
+    }
+
+    categoryMap.get(q.categoryId)!.questions.push({
+      id: q.id,
+      description,
+      display_sequence: q.displaySequence,
+      result,
+      ...(alternative_results ? { alternative_results } : {}),
+    });
   }
 
-  // Question pool JSON
+  const categories = Array.from(categoryMap.values()).sort((a, b) => a.category_id - b.category_id);
+  for (const cat of categories) {
+    cat.questions.sort((a, b) => a.display_sequence.localeCompare(b.display_sequence));
+  }
+
+  return { categories, errorCount };
+}
+
+function writeQuestionPool(
+  outputDir: string,
+  lang: LanguageDefinition,
+  categories: CategoryEntry[],
+  errorCount: number,
+  engine: "sqlite" | "postgresql" = "sqlite",
+): void {
+  const totalQuestions = categories.reduce((sum, c) => sum + c.questions.length, 0);
   const questionPool = {
     language: lang.code,
+    engine,
     defaultQuery: `SELECT * FROM ${lang.tables.Student};`,
     questions: categories,
   };
@@ -356,16 +579,7 @@ async function generateForLanguage(code: string, SQL: SqlJsStatic): Promise<bool
     JSON.stringify(questionPool),
     "utf-8"
   );
-  console.log(`Wrote questionpool.json (${categories.length} categories, ${oracle.questions.length - errorCount} questions)`);
-
-  // Database file
-  const dbData = db.export();
-  writeFileSync(join(outputDir, "data.sqlite3"), Buffer.from(dbData));
-  console.log(`Wrote data.sqlite3 (${dbData.length} bytes)`);
-
-  db.close();
-
-  return errorCount === 0;
+  console.log(`Wrote questionpool.json (${categories.length} categories, ${totalQuestions} questions${errorCount > 0 ? `, ${errorCount} errors` : ""})`);
 }
 
 // ── Main ───────────────────────────────────────────────────────
@@ -377,7 +591,16 @@ async function main() {
   let allOk = true;
 
   for (const code of codes) {
-    const ok = await generateForLanguage(code, SQL);
+    const lang = await loadLanguage(code);
+    // Skip engine-variant packs (e.g. sv-pg) — we generate those automatically
+    if (lang.engine === "postgresql") continue;
+
+    // Generate SQLite data
+    let ok = await generateSqliteLanguage(lang, SQL);
+    if (!ok) allOk = false;
+
+    // Generate PostgreSQL data (into {code}-pg/ directory)
+    ok = await generatePgLanguage(lang, `${code}-pg`);
     if (!ok) allOk = false;
   }
 
