@@ -15,7 +15,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Editor from "react-simple-code-editor";
 import "./App.css";
 import ResultTable from "./ResultTable";
@@ -30,6 +30,10 @@ import "prismjs/themes/prism.css";
 import { format } from "sql-formatter";
 import initSqlJs from "sql.js";
 import ViewsTable, { View } from "./ViewsTable";
+import { raToSQL, RAError } from "./ra-engine/relationalAlgebra";
+import RAReference from "./ra-engine/RAReference";
+import { highlightRA } from "./ra-engine/raHighlight";
+import RAPreview from "./ra-engine/RAPreview";
 
 import { Info, Settings, XCircle, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import ChangelogDialog from "./ChangelogDialog";
@@ -44,6 +48,7 @@ import sha256 from "crypto-js/sha256";
 import { format as formatFns } from "date-fns";
 import { toPng } from "html-to-image";
 import PrivacyNoticeToggle from "./PrivacyNoticeToggle";
+import LicenseDialog from "./LicenseDialog";
 import ThemeToggle from "./ThemeToggle";
 import useTheme from "./useTheme";
 import { isCorrectResult, Result } from "./utils";
@@ -54,6 +59,22 @@ import { ParsedSaveData, parseImportFile, getLocalData, detectConflicts } from "
 import { useLanguage, langKey, getUrlParam, setUrlParam } from "./i18n/context";
 import LanguageSelector from "./LanguageSelector";
 import { getQuestion } from "./QuestionSelector";
+
+/** Storage key namespaced by editor mode */
+function modeKey(base: string, mode: "sql" | "ra"): string {
+  return mode === "ra" ? `ra-${base}` : base;
+}
+
+/** Get a JSON-parsed list from localStorage, with language and mode namespacing */
+function getStoredList(lang: string, key: string): number[] {
+  const raw = localStorage.getItem(langKey(lang, key));
+  return raw ? JSON.parse(raw) : [];
+}
+
+/** Set a JSON list in localStorage, with language namespacing */
+function setStoredList(lang: string, key: string, value: number[]): void {
+  localStorage.setItem(langKey(lang, key), JSON.stringify(value));
+}
 
 function App() {
   const { lang, t, questions, dbArrayBuffer, defaultQuery } = useLanguage();
@@ -78,6 +99,11 @@ function App() {
   const [exportQuery, setExportQuery] = useState<string | undefined>();
   const [exportingStatus, setExportingStatus] = useState<number>(0);
   const [loadedQuestionCorrect, setLoadedQuestionCorrect] = useState<boolean>(false);
+  const [editorMode, setEditorMode] = useState<"sql" | "ra">(() => {
+    const param = getUrlParam("mode");
+    return param === "ra" ? "ra" : "sql";
+  });
+
   const exportRendererRef = useRef<HTMLDivElement>(null);
 
   const editorRef = useRef<Editor>(null);
@@ -86,11 +112,11 @@ function App() {
   const [pendingImportData, setPendingImportData] = useState<ParsedSaveData | null>(null);
 
   // QuestionSelector needs writtenQuestions and correctQuestions to be able to display the correct state
-  const [writtenQuestions, setWrittenQuestions] = useState<number[]>(
-    localStorage.getItem(langKey(lang, "writtenQuestions")) ? JSON.parse(localStorage.getItem(langKey(lang, "writtenQuestions"))!) : []
+  const [writtenQuestions, setWrittenQuestions] = useState<number[]>(() =>
+    getStoredList(lang, modeKey("writtenQuestions", editorMode))
   );
-  const [correctQuestions, setCorrectQuestions] = useState<number[]>(
-    localStorage.getItem(langKey(lang, "correctQuestions")) ? JSON.parse(localStorage.getItem(langKey(lang, "correctQuestions"))!) : []
+  const [correctQuestions, setCorrectQuestions] = useState<number[]>(() =>
+    getStoredList(lang, modeKey("correctQuestions", editorMode))
   );
 
   // One-time migration: copy old unnamespaced keys to sv: prefix
@@ -121,19 +147,11 @@ function App() {
     localStorage.setItem("i18n-migrated", "1");
   }, []);
 
-  // Reload written/correct questions when language changes
+  // Reload written/correct questions when language or mode changes
   useEffect(() => {
-    setWrittenQuestions(
-      localStorage.getItem(langKey(lang, "writtenQuestions"))
-        ? JSON.parse(localStorage.getItem(langKey(lang, "writtenQuestions"))!)
-        : []
-    );
-    setCorrectQuestions(
-      localStorage.getItem(langKey(lang, "correctQuestions"))
-        ? JSON.parse(localStorage.getItem(langKey(lang, "correctQuestions"))!)
-        : []
-    );
-  }, [lang]);
+    setWrittenQuestions(getStoredList(lang, modeKey("writtenQuestions", editorMode)));
+    setCorrectQuestions(getStoredList(lang, modeKey("correctQuestions", editorMode)));
+  }, [lang, editorMode]);
 
   const resetResult = useCallback(() => {
     setResult(undefined);
@@ -143,6 +161,30 @@ function App() {
     setIsViewResult(false);
     setQueryedView(null);
   }, []);
+
+  const switchEditorMode = useCallback((mode: "sql" | "ra") => {
+    // Save current query before switching
+    if (question && query !== undefined) {
+      const currentKey = modeKey(`questionId-${question.id}`, editorMode);
+      if (query === defaultQuery || query === "") {
+        localStorage.removeItem(langKey(lang, currentKey));
+      } else {
+        localStorage.setItem(langKey(lang, currentKey), query);
+      }
+    }
+    setEditorMode(mode);
+
+    setError(null);
+    resetResult();
+    // Load query for the new mode
+    if (question) {
+      const newKey = modeKey(`questionId-${question.id}`, mode);
+      setQuery(localStorage.getItem(langKey(lang, newKey)) || (mode === "ra" ? "" : defaultQuery));
+    }
+    // Reload progress for the new mode
+    setWrittenQuestions(getStoredList(lang, modeKey("writtenQuestions", mode)));
+    setCorrectQuestions(getStoredList(lang, modeKey("correctQuestions", mode)));
+  }, [resetResult, question, query, editorMode, lang, defaultQuery]);
 
   const initDb = useCallback(async () => {
     if (!dbArrayBuffer) return;
@@ -190,7 +232,7 @@ function App() {
         const resolved = getQuestion(q.id, questions);
         if (resolved) {
           setQuestion(resolved);
-          setQuery(localStorage.getItem(langKey(lang, "questionId-" + resolved.id)) || defaultQuery);
+          setQuery(localStorage.getItem(langKey(lang, modeKey(`questionId-${resolved.id}`, editorMode))) || (editorMode === "ra" ? "" : defaultQuery));
         }
       }
     }
@@ -206,6 +248,11 @@ function App() {
     }
   }, [question]);
 
+  // Sync editor mode to URL
+  useEffect(() => {
+    setUrlParam("mode", editorMode === "ra" ? "ra" : null);
+  }, [editorMode]);
+
   // Track which language the current question was loaded in
   const questionLangRef = useRef(lang);
   useEffect(() => {
@@ -220,42 +267,56 @@ function App() {
     if (questionLangRef.current !== lang) {
       return;
     }
-    let wq = JSON.parse(localStorage.getItem(langKey(lang, "writtenQuestions")) || "[]");
+    const wqStorageKey = modeKey("writtenQuestions", editorMode);
+    let wq = getStoredList(lang, wqStorageKey);
     const initialLength = wq.length;
+    const storageKey = modeKey(`questionId-${question.id}`, editorMode);
     if (query === defaultQuery || query === "") {
-      localStorage.removeItem(langKey(lang, "questionId-" + question.id));
-      // remove from writtenQuestions if it exists there as well
-      const filtered = wq.filter((id: number) => id !== question.id);
-      wq = filtered;
+      localStorage.removeItem(langKey(lang, storageKey));
+      wq = wq.filter((id: number) => id !== question.id);
     } else {
-      localStorage.setItem(langKey(lang, "questionId-" + question.id), query);
-      // ensure that questionid is in localstorage writtenQuestions
+      localStorage.setItem(langKey(lang, storageKey), query);
       if (!wq.includes(question.id)) {
         wq.push(question.id);
       }
     }
     if (wq.length !== initialLength) {
-      localStorage.setItem(langKey(lang, "writtenQuestions"), JSON.stringify(wq));
+      setStoredList(lang, wqStorageKey, wq);
       setWrittenQuestions(wq);
     }
 
-    try {
-      // Check for multiple statements
-      let stmtCount = 0;
-      for (const stmt of database.iterateStatements(query)) {
-        stmtCount++;
-        stmt.free();
-        if (stmtCount > 1) {
-          setError(t("multipleStatements"));
-          return;
+    if (editorMode === "sql") {
+      try {
+        // Check for multiple statements
+        let stmtCount = 0;
+        for (const stmt of database.iterateStatements(query)) {
+          stmtCount++;
+          stmt.free();
+          if (stmtCount > 1) {
+            setError(t("multipleStatements"));
+            return;
+          }
+        }
+        setError(null);
+      } catch (e) {
+        // @ts-expect-error - Error.message is a string
+        setError(e.message);
+      }
+    } else {
+      // In RA mode, try to parse and validate against database
+      try {
+        raToSQL(query, database);
+        setError(null);
+      } catch (e) {
+        if (e instanceof RAError) {
+          setError(t("raParseError", { message: e.message }));
+        } else {
+          // @ts-expect-error - Error.message is a string
+          setError(e.message);
         }
       }
-      setError(null);
-    } catch (e) {
-      // @ts-expect-error - Error.message is a string
-      setError(e.message);
     }
-  }, [database, query, question, lang, defaultQuery, t]);
+  }, [database, query, question, lang, defaultQuery, t, editorMode]);
 
 
   const refreshViews = useCallback((upsert: boolean) => {
@@ -307,7 +368,21 @@ function App() {
       return;
     }
     try {
-      const res = database.exec(query);
+      let sqlToRun = query;
+      if (editorMode === "ra") {
+        try {
+          sqlToRun = raToSQL(query, database);
+        } catch (e) {
+          if (e instanceof RAError) {
+            setError(t("raParseError", { message: e.message }));
+          } else {
+            // @ts-expect-error - Error.message is a string
+            setError(e.message);
+          }
+          return;
+        }
+      }
+      const res = database.exec(sqlToRun);
       setIsViewResult(false);
       setQueryedView(null);
       setEvaluatedQuery(query);
@@ -322,7 +397,7 @@ function App() {
       // @ts-expect-error - Error.message is a string
       setError(e.message);
     }
-  }, [database, query, refreshViews]);
+  }, [database, query, refreshViews, editorMode, t]);
 
   const evalSql = useCallback((sql: string): Result => {
     if (!database) {
@@ -406,26 +481,29 @@ function App() {
     setIsCorrect(true);
     setMatchedResult(matchedAlt ?? question.evaluable_result);
 
-    localStorage.setItem(langKey(lang, `correctQuestionId-${question.id}`), query);
+    const cKey = modeKey(`correctQuestionId-${question.id}`, editorMode);
+    localStorage.setItem(langKey(lang, cKey), query);
     setCorrectQueryMismatch(false);
     setLoadedQuestionCorrect(true);
 
-    const cq = JSON.parse(localStorage.getItem(langKey(lang, "correctQuestions")) || "[]");
+    const cqStorageKey = modeKey("correctQuestions", editorMode);
+    const cq = getStoredList(lang, cqStorageKey);
     if (!cq.includes(question.id)) {
       cq.push(question.id);
-      localStorage.setItem(langKey(lang, "correctQuestions"), JSON.stringify(cq));
+      setStoredList(lang, cqStorageKey, cq);
       setCorrectQuestions(cq);
     }
-  }, [result, question, query, evaluatedQuery, exportingStatus, lang]);
+  }, [result, question, query, evaluatedQuery, exportingStatus, lang, editorMode]);
 
   // Save query based on question
   const loadQuery = useCallback((_oldQuestion: Question | undefined, newQuestion: Question) => {
-    setQuery(localStorage.getItem(langKey(lang, "questionId-" + newQuestion.id)) || defaultQuery);
+    const key = modeKey(`questionId-${newQuestion.id}`, editorMode);
+    setQuery(localStorage.getItem(langKey(lang, key)) || (editorMode === "ra" ? "" : defaultQuery));
     // This prevents user from ctrl-z'ing to a different question
     if (editorRef.current) {
       editorRef.current!.session = {history: { stack: [], offset: 0 }};
     }
-  }, [setQuery, lang, defaultQuery]);
+  }, [setQuery, lang, defaultQuery, editorMode]);
 
   // Update mismatch & loadedQuestionCorrect flags when query is changed
   useEffect(() => {
@@ -433,7 +511,8 @@ function App() {
       return;
     }
 
-    const correctQuery = localStorage.getItem(langKey(lang, `correctQuestionId-${question.id}`));
+    const cKey = modeKey(`correctQuestionId-${question.id}`, editorMode);
+    const correctQuery = localStorage.getItem(langKey(lang, cKey));
     if (!correctQuery) {
       setCorrectQueryMismatch(false);
       setLoadedQuestionCorrect(false);
@@ -442,9 +521,25 @@ function App() {
 
     setLoadedQuestionCorrect(true);
 
-    let currentQuery = "";
-    try {
-      currentQuery = format(query + (query.endsWith(";") ? "" : ";"), {
+    if (editorMode === "ra") {
+      // For RA, compare raw text (trimmed)
+      setCorrectQueryMismatch(query.trim() !== correctQuery.trim());
+    } else {
+      let currentQuery = "";
+      try {
+        currentQuery = format(query + (query.endsWith(";") ? "" : ";"), {
+          language: "sqlite",
+          tabWidth: 2,
+          useTabs: false,
+          keywordCase: "upper",
+          dataTypeCase: "upper",
+          functionCase: "upper",
+        });
+      } catch {
+        setCorrectQueryMismatch(true);
+        return;
+      }
+      const correctQueryFormatted = format(correctQuery + (correctQuery?.endsWith(";") ? "" : ";"), {
         language: "sqlite",
         tabWidth: 2,
         useTabs: false,
@@ -452,20 +547,9 @@ function App() {
         dataTypeCase: "upper",
         functionCase: "upper",
       });
-    } catch {
-      setCorrectQueryMismatch(true);
-      return;
+      setCorrectQueryMismatch(currentQuery !== correctQueryFormatted);
     }
-    const correctQueryFormatted = format(correctQuery + (correctQuery?.endsWith(";") ? "" : ";"), {
-      language: "sqlite",
-      tabWidth: 2,
-      useTabs: false,
-      keywordCase: "upper",
-      dataTypeCase: "upper",
-      functionCase: "upper",
-    });
-    setCorrectQueryMismatch(currentQuery !== correctQueryFormatted);
-  }, [database, question, query, lang]);
+  }, [database, question, query, lang, editorMode]);
 
   const exportData = useCallback((options?: { include?: number[]}) => {
     if (!database) {
@@ -492,15 +576,20 @@ function App() {
 
     output += "/* --- BEGIN Validation --- */\n";
 
-    output += "/* --- BEGIN Submission Summary --- */\n";
-    const writtenQueries = localStorage.getItem(langKey(lang, "correctQuestions")) || "[]";
-    const parsed = JSON.parse(writtenQueries) as number[];
-    const questionsString = parsed.filter((id) => options === undefined || (options.include && options.include.includes(id))).map((id) => {
+    // Cache localStorage reads used multiple times below
+    const storedCorrectIds = getStoredList(lang, "correctQuestions");
+    const storedWrittenIds = getStoredList(lang, "writtenQuestions");
+
+    const formatQuestionIds = (ids: number[]) => ids.map((id) => {
       const category = questions.find(c => c.questions.some(q => q.id === id))!;
       const q = category.questions.find(q => q.id === id)!;
       return { formatted: `${category.display_number}${q.display_sequence}`, number: category.display_number, sequence: q.display_sequence };
     }).sort((a, b) => a.sequence.localeCompare(b.sequence)).sort((a, b) => a.number - b.number).map(q => q.formatted).join(", ");
-    output += `-- Written Questions: ${questionsString}\n`;
+
+    const filterIds = (ids: number[]) => ids.filter((id) => options === undefined || (options.include && options.include.includes(id)));
+
+    output += "/* --- BEGIN Submission Summary --- */\n";
+    output += `-- Written Questions: ${formatQuestionIds(filterIds(storedCorrectIds))}\n`;
     output += "/* --- END Submission Summary --- */\n";
     if (views.length > 0) {
       output += "/* --- BEGIN Views --- */\n";
@@ -522,10 +611,8 @@ function App() {
     }
     output += "/* --- BEGIN Submission Queries --- */\n";
 
-    const queriesStr = localStorage.getItem(langKey(lang, "correctQuestions"));
-    if (queriesStr) {
-      const parsed = JSON.parse(queriesStr) as number[];
-      const sorted = parsed.filter((id) => options === undefined || (options.include && options.include.includes(id))).map((id) => {
+    if (storedCorrectIds.length > 0) {
+      const sorted = filterIds(storedCorrectIds).map((id) => {
         const category = questions.find(c => c.questions.some(q => q.id === id))!;
         const q = category.questions.find(q => q.id === id)!;
         return { category, question: q };
@@ -556,55 +643,30 @@ function App() {
     output += "/* --- END Submission Queries --- */\n";
 
     output += "/* --- BEGIN Save Summary --- */\n";
-    const existingQueries = localStorage.getItem(langKey(lang, "writtenQuestions")) || "[]";
-    const existingParsed = JSON.parse(existingQueries) as number[];
-    const existingQuestions = existingParsed.map((id) => {
-      const category = questions.find(c => c.questions.some(q => q.id === id))!;
-      const q = category.questions.find(q => q.id === id)!;
-      return { formatted: `${category.display_number}${q.display_sequence}`, number: category.display_number, sequence: q.display_sequence };
-    }).sort((a, b) => a.sequence.localeCompare(b.sequence)).sort((a, b) => a.number - b.number).map(q => q.formatted).join(", ");
-    output += `-- Written Questions: ${existingQuestions}\n`;
+    output += `-- Written Questions: ${formatQuestionIds(storedWrittenIds)}\n`;
     output += "/* --- END Save Summary --- */\n";
+    const collectQueries = (ids: number[], keyPrefix: string) => {
+      const queries: { [key: number]: string } = {};
+      for (const id of ids) {
+        const q = localStorage.getItem(langKey(lang, keyPrefix + id));
+        if (q) queries[id] = q;
+      }
+      return queries;
+    };
+
     output += "/* --- BEGIN Raw Queries --- */\n";
     output += "/*\n";
-    const allQueries = localStorage.getItem(langKey(lang, "writtenQuestions"));
-    if (allQueries) {
-      const parsed = JSON.parse(allQueries);
-      const queries: { [key: number]: string } = {};
-      for (const id of parsed) {
-        const activeQuery = localStorage.getItem(langKey(lang, "questionId-" + id));
-        if (!activeQuery) {
-          continue;
-        }
-        queries[id] = activeQuery;
-      }
-      output += JSON.stringify(queries, null, 0).replace(/\*\//g, "\\*/");
-    }
+    output += JSON.stringify(collectQueries(storedWrittenIds, "questionId-"), null, 0).replace(/\*\//g, "\\*/");
     output += "\n*/\n";
     output += "/* --- END Raw Queries --- */\n";
     output += "/* --- BEGIN Correct Raw Queries --- */\n";
     output += "/*\n";
-    const allCorrectQueries = localStorage.getItem(langKey(lang, "correctQuestions"));
-    if (allCorrectQueries) {
-      const parsed = JSON.parse(allCorrectQueries);
-      const queries: { [key: number]: string } = {};
-      for (const id of parsed) {
-        const activeQuery = localStorage.getItem(langKey(lang, "correctQuestionId-" + id));
-        if (!activeQuery) {
-          continue;
-        }
-        queries[id] = activeQuery;
-      }
-      output += JSON.stringify(queries, null, 0).replace(/\*\//g, "\\*/");
-    }
+    output += JSON.stringify(collectQueries(storedCorrectIds, "correctQuestionId-"), null, 0).replace(/\*\//g, "\\*/");
     output += "\n*/\n";
     output += "/* --- END Correct Raw Queries --- */\n";
     output += "/* --- BEGIN Raw List Dumps --- */\n";
-    output += "-- " + (localStorage.getItem(langKey(lang, "writtenQuestions")) === null ? "[]" : localStorage.getItem(langKey(lang, "writtenQuestions"))) + "\n";
-    output += "-- " + (localStorage.getItem(langKey(lang, "correctQuestions")) === null ? "[]" :
-      JSON.stringify((JSON.parse(localStorage.getItem(langKey(lang, "correctQuestions"))!) as number[])
-        .filter((id) => options === undefined || (options.include && options.include.includes(id))))
-    ) + "\n";
+    output += "-- " + JSON.stringify(storedWrittenIds) + "\n";
+    output += "-- " + JSON.stringify(filterIds(storedCorrectIds)) + "\n";
     output += "/* --- END Raw List Dumps --- */\n";
 
     output += "/* --- END Validation --- */\n";
@@ -629,10 +691,8 @@ function App() {
 
   const applyMergedData = useCallback((merged: ParsedSaveData) => {
     // Clear current data
-    const oldWritten: number[] = JSON.parse(localStorage.getItem(langKey(lang, "writtenQuestions")) || "[]");
-    oldWritten.forEach(id => localStorage.removeItem(langKey(lang, `questionId-${id}`)));
-    const oldCorrect: number[] = JSON.parse(localStorage.getItem(langKey(lang, "correctQuestions")) || "[]");
-    oldCorrect.forEach(id => localStorage.removeItem(langKey(lang, `correctQuestionId-${id}`)));
+    getStoredList(lang, "writtenQuestions").forEach(id => localStorage.removeItem(langKey(lang, `questionId-${id}`)));
+    getStoredList(lang, "correctQuestions").forEach(id => localStorage.removeItem(langKey(lang, `correctQuestionId-${id}`)));
     localStorage.removeItem(langKey(lang, "writtenQuestions"));
     localStorage.removeItem(langKey(lang, "correctQuestions"));
 
@@ -649,8 +709,8 @@ function App() {
 
     setWrittenQuestions(merged.writtenQuestionIds);
     setCorrectQuestions(merged.correctQuestionIds);
-    localStorage.setItem(langKey(lang, "writtenQuestions"), JSON.stringify(merged.writtenQuestionIds));
-    localStorage.setItem(langKey(lang, "correctQuestions"), JSON.stringify(merged.correctQuestionIds));
+    setStoredList(lang, "writtenQuestions", merged.writtenQuestionIds);
+    setStoredList(lang, "correctQuestions", merged.correctQuestionIds);
 
     // Update views in database
     for (const view of views) {
@@ -711,14 +771,14 @@ function App() {
       return;
     }
 
-    const toExportQuery = localStorage.getItem(langKey(lang, `correctQuestionId-${question.id}`));
+    const toExportQuery = localStorage.getItem(langKey(lang, modeKey(`correctQuestionId-${question.id}`, editorMode)));
     if (!toExportQuery) {
       return;
     }
 
     setExportQuery(toExportQuery);
     setExportQuestion(question);
-  }, [exportView, loadedQuestionCorrect, question, lang]);
+  }, [exportView, loadedQuestionCorrect, question, lang, editorMode]);
 
   const exportImageView = useCallback((name: string) => {
     if (!database || exportQuery) {
@@ -791,16 +851,32 @@ function App() {
       height: exportRenderer.clientHeight,
       pixelRatio: 1
     }).then((dataUrl) => {
-      triggerDownload(dataUrl, `validator_${question.id}_${question.category.display_number}${question.display_sequence}.png`);
+      triggerDownload(dataUrl, `validator_${editorMode === "ra" ? "ra_" : ""}${question.id}_${question.category.display_number}${question.display_sequence}.png`);
       setExportQuestion(undefined);
       setExportQuery(undefined);
       setExportingStatus(0);
     });
   }, [evaluatedQuery, exportQuery, exportRendererRef, getTheme, isDarkMode, exportingStatus, question, resetResult, setTheme, exportQuestion, exportView]);
 
+  const exportRendererProps = useMemo(() => {
+    if (!exportQuestion || !exportQuery) return null;
+    let sqlForExport = exportQuery;
+    if (editorMode === "ra" && database) {
+      try { sqlForExport = raToSQL(exportQuery, database); } catch { /* use raw */ }
+    }
+    const exportResult = evalSql(sqlForExport);
+    return {
+      isCorrect: isCorrectResult(exportQuestion.evaluable_result, exportResult) || (exportQuestion.alternative_evaluable_results?.some(alt => isCorrectResult(alt, exportResult)) ?? false),
+      question: exportQuestion,
+      code: exportQuery,
+      result: exportResult,
+      mode: editorMode,
+    };
+  }, [exportQuestion, exportQuery, editorMode, database, evalSql]);
+
   return (
     <div className="App">
-      {exportQuestion && exportQuery && <ExportRenderer query={{isCorrect: isCorrectResult(exportQuestion.evaluable_result, evalSql(exportQuery)) || (exportQuestion.alternative_evaluable_results?.some(alt => isCorrectResult(alt, evalSql(exportQuery))) ?? false), question: exportQuestion, code: exportQuery, result: evalSql(exportQuery)}} ref={exportRendererRef} />}
+      {exportRendererProps && <ExportRenderer query={exportRendererProps} ref={exportRendererRef} />}
       {exportView && <ExportRenderer view={{view: exportView, result: evalSql(`SELECT * FROM ${exportView.name}`)}} ref={exportRendererRef} />}
       <header className="App-header">
         <div className="my-2"></div>
@@ -817,7 +893,24 @@ function App() {
         {/* Query Section with Header */}
         <div className="w-full max-w-4xl">
           <div className="flex justify-between items-center mb-2 px-1">
-            <span className="font-semibold text-base">{t("query")}</span>
+            <div className="flex items-center gap-3">
+              <span className="font-semibold text-base">{t("query")}</span>
+              <div className="inline-flex gap-1 text-sm">
+                <button
+                  onClick={() => switchEditorMode("sql")}
+                  className={`px-2 py-0.5 rounded transition-colors ${editorMode === "sql" ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-medium" : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"}`}
+                >
+                  {t("modeSQL")}
+                </button>
+                <span className="text-gray-300 dark:text-gray-600 select-none">/</span>
+                <button
+                  onClick={() => switchEditorMode("ra")}
+                  className={`px-2 py-0.5 rounded transition-colors ${editorMode === "ra" ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-medium" : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"}`}
+                >
+                  {t("modeRA")}
+                </button>
+              </div>
+            </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label={t("actionsMenu")}>
@@ -844,10 +937,10 @@ function App() {
             <Editor
               id="placeholder-editor"
               itemID="placeholder-editor"
-              value={t("selectQuestionComment")}
+              value={editorMode === "ra" ? t("raPlaceholder") : t("selectQuestionComment")}
               disabled={true}
               onValueChange={_code => null}
-              highlight={code => highlight(code, languages.sql)}
+              highlight={code => editorMode === "ra" ? highlightRA(code, isDarkMode()) : highlight(code, languages.sql)}
               padding={10}
               tabSize={2}
               className="font-mono text-base w-full dark:bg-slate-800 bg-slate-100 min-h-32 rounded-md"
@@ -859,13 +952,14 @@ function App() {
               itemID="editor"
               value={query}
               onValueChange={code => setQuery(code)}
-              highlight={code => highlight(code, languages.sql)}
+              highlight={code => editorMode === "ra" ? highlightRA(code, isDarkMode()) : highlight(code, languages.sql)}
               padding={10}
               tabSize={2}
               className="font-mono text-base w-full dark:bg-slate-800 bg-slate-100 border dark:border-slate-600 border-gray-300 min-h-32 rounded-md"
               ref={editorRef}
             />
           }
+          {editorMode === "ra" && query !== undefined && <RAPreview code={query} />}
         </div>
 
         {/* Error/Warning and Action Buttons - Same Row */}
@@ -884,7 +978,10 @@ function App() {
                 <span className="text-sm">{t("queryMismatch")}</span>
               </div>
             )}
-            <a href="https://github.com/Edwinexd/db-sqlite-tools/releases/latest/download/DB_SQLite_Implementation_Tools.pdf" target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t("sqlReference")}</a>
+            {editorMode === "ra"
+              ? <RAReference />
+              : <a href="https://github.com/Edwinexd/db-sqlite-tools/releases/latest/download/DB_SQLite_Implementation_Tools.pdf" target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">{t("sqlReference")}</a>
+            }
           </div>
 
           {/* Right side - Buttons */}
@@ -894,30 +991,32 @@ function App() {
                 variant="outline"
                 onClick={() => {
                   if (!question) return;
-                  setQuery(localStorage.getItem(langKey(lang, `correctQuestionId-${question.id}`)) || defaultQuery);
+                  setQuery(localStorage.getItem(langKey(lang, modeKey(`correctQuestionId-${question.id}`, editorMode))) || (editorMode === "ra" ? "" : defaultQuery));
                 }}
                 className="border-yellow-500 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20"
               >
                 {t("loadSaved")}
               </Button>
             )}
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (!query) return;
-                setQuery(format(query, {
-                  language: "sqlite",
-                  tabWidth: 2,
-                  useTabs: false,
-                  keywordCase: "upper",
-                  dataTypeCase: "upper",
-                  functionCase: "upper",
-                }));
-              }}
-              disabled={!(error === null) || query === undefined}
-            >
-              {t("formatCode")}
-            </Button>
+            {editorMode === "sql" && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (!query) return;
+                  setQuery(format(query, {
+                    language: "sqlite",
+                    tabWidth: 2,
+                    useTabs: false,
+                    keywordCase: "upper",
+                    dataTypeCase: "upper",
+                    functionCase: "upper",
+                  }));
+                }}
+                disabled={!(error === null) || query === undefined}
+              >
+                {t("formatCode")}
+              </Button>
+            )}
             <Button
               onClick={runQuery}
               disabled={!(error === null) || query === undefined}
@@ -927,6 +1026,7 @@ function App() {
             </Button>
           </div>
         </div>
+
 
         <ExportSelectorModal correctQuestions={correctQuestions} onExport={(include) => exportData({include})} ref={exportModalRef} />
         <ImportDialog
@@ -1033,7 +1133,7 @@ function App() {
           <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-2 text-gray-600 dark:text-gray-400">
             <span>Copyright &copy; <a href="https://github.com/Edwinexd" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">Edwin Sundberg</a> {new Date().getFullYear()}</span>
             <span>-</span>
-            <a href="https://github.com/Edwinexd/sql-validator?tab=GPL-3.0-1-ov-file" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">GPL-3.0</a>
+            <LicenseDialog />
             <a href="https://github.com/Edwinexd/sql-validator/issues" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">Report Issue</a>
             <ChangelogDialog />
             <PrivacyNoticeToggle></PrivacyNoticeToggle>
