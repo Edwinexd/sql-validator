@@ -10,6 +10,7 @@ export interface LanguageInfo {
 export const AVAILABLE_LANGUAGES: LanguageInfo[] = [
   { code: "sv", displayName: "Svenska" },
   { code: "en", displayName: "English" },
+  { code: "de", displayName: "Deutsch" },
 ];
 
 export const DEFAULT_LANGUAGE = "sv";
