@@ -179,13 +179,13 @@
 <text xml:space="preserve" text-anchor="start" x="1464.57" y="-853.4" font-family="Helvetica,sans-Serif" font-style="italic" font-size="42.00" fill="#334155">TEXT</text>
 <polygon fill="#cbd5e1" stroke="none" points="996.02,-756.4 996.02,-828.8 1582.91,-828.8 1582.91,-756.4 996.02,-756.4"/>
 <polygon fill="none" stroke="#cbd5e1" points="996.02,-756.4 996.02,-828.8 1582.91,-828.8 1582.91,-756.4 996.02,-756.4"/>
-<text xml:space="preserve" text-anchor="start" x="1007.02" y="-781" font-family="Helvetica,sans-Serif" font-size="42.00" fill="#334155">dozNr</text>
-<text xml:space="preserve" text-anchor="start" x="1119.05" y="-781" font-family="Helvetica,sans-Serif" font-size="42.00" fill="transparent"> &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+<text xml:space="preserve" text-anchor="start" x="1007.02" y="-781" font-family="Helvetica,sans-Serif" font-size="42.00" fill="#334155">dozentNr</text>
+<text xml:space="preserve" text-anchor="start" x="1177.44" y="-781" font-family="Helvetica,sans-Serif" font-size="42.00" fill="transparent"> &#160;&#160;&#160;&#160;&#160;</text>
 <text xml:space="preserve" text-anchor="start" x="1464.57" y="-781" font-family="Helvetica,sans-Serif" font-style="italic" font-size="42.00" fill="#334155">TEXT</text>
 <polygon fill="#cbd5e1" stroke="none" points="996.02,-684 996.02,-756.4 1582.91,-756.4 1582.91,-684 996.02,-684"/>
 <polygon fill="none" stroke="#cbd5e1" points="996.02,-684 996.02,-756.4 1582.91,-756.4 1582.91,-684 996.02,-684"/>
-<text xml:space="preserve" text-anchor="start" x="1007.02" y="-708.6" font-family="Helvetica,sans-Serif" font-size="42.00" fill="#334155">raum</text>
-<text xml:space="preserve" text-anchor="start" x="1102.71" y="-708.6" font-family="Helvetica,sans-Serif" font-size="42.00" fill="transparent"> &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+<text xml:space="preserve" text-anchor="start" x="1007.02" y="-708.6" font-family="Helvetica,sans-Serif" font-size="42.00" fill="#334155">raumID</text>
+<text xml:space="preserve" text-anchor="start" x="1144.71" y="-708.6" font-family="Helvetica,sans-Serif" font-size="42.00" fill="transparent"> &#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
 <text xml:space="preserve" text-anchor="start" x="1385.22" y="-708.6" font-family="Helvetica,sans-Serif" font-style="italic" font-size="42.00" fill="#334155">INTEGER</text>
 <polygon fill="#cbd5e1" stroke="none" points="996.02,-611.6 996.02,-684 1582.91,-684 1582.91,-611.6 996.02,-611.6"/>
 <polygon fill="none" stroke="#cbd5e1" points="996.02,-611.6 996.02,-684 1582.91,-684 1582.91,-611.6 996.02,-611.6"/>
@@ -225,8 +225,8 @@
 <text xml:space="preserve" text-anchor="start" x="305.79" y="-1251" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="42.00" fill="#ffffff">Teilnehmer</text>
 <polygon fill="#cbd5e1" stroke="none" points="124.38,-1154 124.38,-1226.4 711.26,-1226.4 711.26,-1154 124.38,-1154"/>
 <polygon fill="none" stroke="#cbd5e1" points="124.38,-1154 124.38,-1226.4 711.26,-1226.4 711.26,-1154 124.38,-1154"/>
-<text xml:space="preserve" text-anchor="start" x="135.38" y="-1178.6" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="42.00" fill="#334155">student</text>
-<text xml:space="preserve" text-anchor="start" x="287.03" y="-1178.6" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="42.00" fill="transparent"> &#160;&#160;&#160;&#160;&#160;&#160;</text>
+<text xml:space="preserve" text-anchor="start" x="135.38" y="-1178.6" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="42.00" fill="#334155">studNr</text>
+<text xml:space="preserve" text-anchor="start" x="270.71" y="-1178.6" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="42.00" fill="transparent"> &#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
 <text xml:space="preserve" text-anchor="start" x="592.93" y="-1178.6" font-family="Helvetica,sans-Serif" font-style="italic" font-size="42.00" fill="#334155">TEXT</text>
 <polygon fill="#cbd5e1" stroke="none" points="124.38,-1081.6 124.38,-1154 711.26,-1154 711.26,-1081.6 124.38,-1081.6"/>
 <polygon fill="none" stroke="#cbd5e1" points="124.38,-1081.6 124.38,-1154 711.26,-1154 711.26,-1081.6 124.38,-1081.6"/>
