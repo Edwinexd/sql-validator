@@ -425,6 +425,8 @@ const de: LanguageDefinition = {
     conflicts: "Konflikte",
     languageMismatchWarning:
       "Warnung: Diese Speicherdatei wurde in einer anderen Sprache erstellt ({{fileLang}}). Der Import kann zu Problemen führen..",
+    viewLabel: "View",
+    changelog: "Änderungsprotokoll",
   },
 };
 

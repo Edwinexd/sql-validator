@@ -86,11 +86,6 @@ export interface LanguageDefinition {
     Room: Record<CanonicalColumns["Room"], string>;
   };
 
-  // ── Query aliases ──────────────────────────────────────────
-  /** Maps canonical alias names used in reference queries to localized labels.
-   *  These appear as column names in query results (e.g. COUNT(*) AS antal). */
-  aliases: Record<string, string>;
-
   // ── Aggregate label ─────────────────────────────────────────
   /** Label used as column name for aggregate expressions (COUNT, SUM, etc.) in expected results */
   aggregateLabel: string;

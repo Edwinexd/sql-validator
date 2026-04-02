@@ -425,6 +425,8 @@ const en: LanguageDefinition = {
     conflicts: "conflicts",
     languageMismatchWarning:
       "Warning: This save file was created with a different language ({{fileLang}}). Importing may cause issues.",
+    viewLabel: "View",
+    changelog: "Changelog",
   },
 };
 
