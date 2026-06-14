@@ -1088,7 +1088,11 @@ function nodeToSQL(node: RANode, db?: DatabaseHandle): string {
       return `SELECT * FROM (${nodeToSQL(node.relation, db)}) WHERE ${conditionToSQL(node.condition)}`;
 
     case "projection":
-      return `SELECT ${node.columns.map(columnRefToSQL).join(", ")} FROM (${nodeToSQL(node.relation, db)})`;
+      // Projection (π) follows relational-algebra set semantics: it eliminates duplicate
+      // tuples. Without DISTINCT, dropping non-key columns would leave SQL bag-duplicates
+      // that don't exist in RA. δ remains available as an explicit (now usually redundant)
+      // duplicate-elimination operator.
+      return `SELECT DISTINCT ${node.columns.map(columnRefToSQL).join(", ")} FROM (${nodeToSQL(node.relation, db)})`;
 
     case "rename": {
       const inner = nodeToSQL(node.relation, db);
