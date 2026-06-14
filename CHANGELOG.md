@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-06-14 - Relational algebra mode
+You can now answer questions with relational algebra instead of SQL. Use the SQL/RA toggle to switch. Expressions are converted to SQL and run the same way, and the generated SQL is shown for reference.
+
 ## 2026-03-19 - Changelog added
 A changelog has been added to the app to keep you updated on new features and bug fixes.
 
