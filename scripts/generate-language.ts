@@ -14,6 +14,7 @@ import { join } from "path";
 import type { SqlJsStatic } from "sql.js";
 import type { OracleData } from "../data/oracle-types";
 import type { LanguageDefinition, CanonicalTable } from "../languages/types";
+import { normalizePgValue } from "../src/database/pgNormalize";
 
 // ── CLI argument parsing ───────────────────────────────────────
 const args = process.argv.slice(2);
@@ -382,20 +383,17 @@ async function generatePgLanguage(lang: LanguageDefinition, outputCode: string):
 
   async function runQueryAsync(queryTemplate: string): Promise<ResultData> {
     const resolvedQuery = resolveQuery(queryTemplate, lang);
-    const res = await db.query(resolvedQuery);
+    // rowMode "array" preserves duplicate column names; normalization is shared with
+    // the live engine (src/database/pgNormalize) so the oracle and student results
+    // are produced identically.
+    const res = await db.query(resolvedQuery, [], { rowMode: "array" });
     if (res.rows.length > 0 || res.fields.length > 0) {
       const columns = res.fields.map(f =>
         /[()]/.test(f.name) ? lang.aggregateLabel : f.name
       );
-      const values = res.rows.map(row => {
-        return columns.map((_, i) => {
-          const val = (row as Record<string, unknown>)[res.fields[i].name];
-          if (val instanceof Date) return val.toISOString().split("T")[0];
-          if (typeof val === "boolean") return val ? 1 : 0;
-          if (val === null || val === undefined) return null;
-          return val as string | number;
-        });
-      });
+      const values = (res.rows as unknown[][]).map(row =>
+        row.map((val, i) => normalizePgValue(val, res.fields[i].dataTypeID) as string | number | null)
+      );
       return { columns, values };
     }
     return { columns: [], values: [] };
