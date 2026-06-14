@@ -1,5 +1,6 @@
 import type { PGlite } from "@electric-sql/pglite";
 import type { DatabaseEngine, QueryResult } from "./types";
+import { normalizePgValue } from "./pgNormalize";
 
 export class PgliteEngine implements DatabaseEngine {
   readonly engine = "postgresql" as const;
@@ -10,20 +11,15 @@ export class PgliteEngine implements DatabaseEngine {
   }
 
   async exec(sql: string): Promise<QueryResult[]> {
-    const results = await this.db.exec(sql);
+    // rowMode "array" returns each row as a positional array aligned with `fields`.
+    // Object mode keys rows by column name, which silently collapses duplicate column
+    // names (e.g. `SELECT namn, namn` or self-joins) down to a single value.
+    const results = await this.db.exec(sql, { rowMode: "array" });
     return results.map(r => ({
       columns: r.fields.map(f => f.name),
-      values: r.rows.map(row => {
-        // PGLite returns rows as objects, convert to arrays matching column order
-        const fields = r.fields.map(f => f.name);
-        return fields.map(name => {
-          const val = (row as Record<string, unknown>)[name];
-          // Normalize PG types to match the app's expected format
-          if (val instanceof Date) return val.toISOString().split("T")[0]; // DATE → "YYYY-MM-DD"
-          if (typeof val === "boolean") return val ? 1 : 0; // BOOLEAN → 0/1 for result comparison
-          return val;
-        });
-      }),
+      values: (r.rows as unknown[][]).map(row =>
+        row.map((val, i) => normalizePgValue(val, r.fields[i].dataTypeID)),
+      ),
     }));
   }
 
