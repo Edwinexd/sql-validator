@@ -28,6 +28,10 @@ INSERT INTO Person VALUES ('EN-018', 'William White', 'Station Road 4', 'BA3 9AR
 INSERT INTO Person VALUES ('EN-019', 'Jane Bell', 'School Lane 12', 'BA4 1AS', 'York', '01234567908');
 INSERT INTO Person VALUES ('EN-020', 'David Wood', 'School Lane 1', 'BA5 2AT', 'York', '01234567909');
 INSERT INTO Person VALUES ('EN-021', 'John Clark', 'High Street 63', 'CB4 3AU', 'Cambridge', '01234567910');
+INSERT INTO Person VALUES ('EN-022', 'George Grant', 'Lake Drive 14', 'YO5 4AV', 'York', '01234567911');
+INSERT INTO Person VALUES ('EN-023', 'Peter Miles', 'Birch Way 7', 'CB6 5AW', 'Oxford', '01234567912');
+INSERT INTO Person VALUES ('EN-024', 'Laura Palmer', 'Bridge Street 22', 'OX5 6AX', 'Brighton', '01234567913');
+INSERT INTO Person VALUES ('EN-025', 'Susan Stone', 'Church Road 3', 'BA6 7AY', 'Guildford', '01234567914');
 INSERT INTO Room VALUES (1, 'Jupiter', 12);
 INSERT INTO Room VALUES (2, 'Orion', 24);
 INSERT INTO Room VALUES (3, 'Sirius', 16);

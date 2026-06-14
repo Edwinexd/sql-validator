@@ -103,25 +103,25 @@ describe("selection (σ)", () => {
 describe("projection (π)", () => {
   it("should transpile π with Unicode", async () => {
     expect(norm(await raToSQL("π[name, age](Person)"))).toBe(
-      norm("SELECT name, age FROM (Person)")
+      norm("SELECT DISTINCT name, age FROM (Person)")
     );
   });
 
   it("should transpile pi keyword", async () => {
     expect(norm(await raToSQL("pi[name](Person)"))).toBe(
-      norm("SELECT name FROM (Person)")
+      norm("SELECT DISTINCT name FROM (Person)")
     );
   });
 
   it("should transpile project keyword", async () => {
     expect(norm(await raToSQL("project[name, city](Person)"))).toBe(
-      norm("SELECT name, city FROM (Person)")
+      norm("SELECT DISTINCT name, city FROM (Person)")
     );
   });
 
   it("should handle table.column references", async () => {
     expect(norm(await raToSQL("π[Person.name](Person)"))).toBe(
-      norm("SELECT Person.name FROM (Person)")
+      norm("SELECT DISTINCT Person.name FROM (Person)")
     );
   });
 });
@@ -298,7 +298,7 @@ describe("set operations", () => {
   it("should handle set difference with hyphenated expression", async () => {
     const sql = await raToSQL("PI[name, city](Person - Teacher)");
     expect(norm(sql)).toContain("EXCEPT");
-    expect(norm(sql)).toContain("SELECT name, city");
+    expect(norm(sql)).toContain("SELECT DISTINCT name, city");
   });
 
   it("should error on union-incompatible column counts when database is provided", async () => {
@@ -475,7 +475,7 @@ describe("grouping/aggregation (γ)", () => {
 describe("composition and nesting", () => {
   it("should handle projection of selection", async () => {
     const sql = await raToSQL("π[name](σ[age > 20](Person))");
-    expect(norm(sql)).toContain("SELECT name FROM");
+    expect(norm(sql)).toContain("SELECT DISTINCT name FROM");
     expect(norm(sql)).toContain("WHERE age > 20");
   });
 
@@ -487,7 +487,7 @@ describe("composition and nesting", () => {
 
   it("should handle complex nested expression", async () => {
     const sql = await raToSQL("π[name](σ[city = 'Stockholm'](Person ⋈ Student))");
-    expect(norm(sql)).toContain("SELECT name FROM");
+    expect(norm(sql)).toContain("SELECT DISTINCT name FROM");
     expect(norm(sql)).toContain("WHERE city = 'Stockholm'");
     expect(norm(sql)).toContain("NATURAL JOIN");
   });
@@ -500,7 +500,7 @@ describe("composition and nesting", () => {
 
   it("should handle deeply nested expressions", async () => {
     const sql = await raToSQL("π[name](σ[age > 20](ρ[id→personId](Person)))");
-    expect(norm(sql)).toContain("SELECT name FROM");
+    expect(norm(sql)).toContain("SELECT DISTINCT name FROM");
     expect(norm(sql)).toContain("WHERE age > 20");
     expect(norm(sql)).toContain("id AS personId");
   });
@@ -576,7 +576,7 @@ describe("multi-line and assignments", () => {
     expect(norm(sql)).toContain("WITH");
     expect(norm(sql)).toContain("Students AS");
     expect(norm(sql)).toContain("WHERE age > 20");
-    expect(norm(sql)).toContain("SELECT name FROM");
+    expect(norm(sql)).toContain("SELECT DISTINCT name FROM");
   });
 
   it("should handle multiple assignments", async () => {
@@ -590,7 +590,7 @@ describe("multi-line and assignments", () => {
     expect(norm(sql)).toContain("A AS");
     expect(norm(sql)).toContain("B AS");
     expect(norm(sql)).toContain("WHERE city = 'Stockholm'");
-    expect(norm(sql)).toContain("SELECT name FROM");
+    expect(norm(sql)).toContain("SELECT DISTINCT name FROM");
   });
 
   it("should handle assignment chaining with joins", async () => {
@@ -610,7 +610,7 @@ describe("multi-line and assignments", () => {
     const sql = await raToSQL("A ← Person; π[name](A)");
     expect(norm(sql)).toContain("WITH");
     expect(norm(sql)).toContain("A AS");
-    expect(norm(sql)).toContain("SELECT name FROM");
+    expect(norm(sql)).toContain("SELECT DISTINCT name FROM");
   });
 
   it("should handle mixed newlines and semicolons", async () => {
@@ -626,7 +626,7 @@ describe("multi-line and assignments", () => {
     // No regression — single-line without assignment should work as before
     expect(await raToSQL("Person")).toBe("Person");
     expect(norm(await raToSQL("π[name](Person)"))).toBe(
-      norm("SELECT name FROM (Person)")
+      norm("SELECT DISTINCT name FROM (Person)")
     );
   });
 
@@ -641,7 +641,7 @@ describe("multi-line and assignments", () => {
     expect(norm(sql)).toContain("WITH");
     expect(norm(sql)).toContain("A AS");
     expect(norm(sql)).toContain("WHERE age > 20");
-    expect(norm(sql)).toContain("SELECT name FROM");
+    expect(norm(sql)).toContain("SELECT DISTINCT name FROM");
   });
 
   it("should handle trailing newlines", async () => {
@@ -659,7 +659,7 @@ describe("multi-line and assignments", () => {
     const sql = await raToSQL(input);
     expect(norm(sql)).toContain("WITH");
     expect(norm(sql)).toContain("A AS");
-    expect(norm(sql)).toContain("SELECT student FROM");
+    expect(norm(sql)).toContain("SELECT DISTINCT student FROM");
     expect(norm(sql)).toContain("WHERE name = 'Peter'");
   });
 });
@@ -675,7 +675,7 @@ describe("curly braces (LaTeX-style)", () => {
 
   it("should support π_{cols}(R)", async () => {
     expect(norm(await raToSQL("π_{name, city}(Person)"))).toBe(
-      norm("SELECT name, city FROM (Person)")
+      norm("SELECT DISTINCT name, city FROM (Person)")
     );
   });
 
@@ -707,7 +707,7 @@ describe("implicit subscripts (no brackets)", () => {
 
   it("should support π cols (R)", async () => {
     expect(norm(await raToSQL("π name, city (Person)"))).toBe(
-      norm("SELECT name, city FROM (Person)")
+      norm("SELECT DISTINCT name, city FROM (Person)")
     );
   });
 
@@ -719,7 +719,7 @@ describe("implicit subscripts (no brackets)", () => {
 
   it("should support pi cols (R) with keyword", async () => {
     expect(norm(await raToSQL("pi name (Person)"))).toBe(
-      norm("SELECT name FROM (Person)")
+      norm("SELECT DISTINCT name FROM (Person)")
     );
   });
 
@@ -735,7 +735,7 @@ describe("implicit subscripts (no brackets)", () => {
 
   it("should support nested implicit subscripts", async () => {
     const sql = await raToSQL("π name (σ age > 20 (Person))");
-    expect(norm(sql)).toContain("SELECT name FROM");
+    expect(norm(sql)).toContain("SELECT DISTINCT name FROM");
     expect(norm(sql)).toContain("WHERE age > 20");
   });
 
@@ -754,7 +754,7 @@ describe("implicit subscripts (no brackets)", () => {
     const sql = await raToSQL(input);
     expect(norm(sql)).toContain("WITH");
     expect(norm(sql)).toContain("WHERE age > 20");
-    expect(norm(sql)).toContain("SELECT name FROM");
+    expect(norm(sql)).toContain("SELECT DISTINCT name FROM");
   });
 });
 
@@ -767,19 +767,19 @@ describe("parenthesis-free syntax", () => {
 
   it("should allow π[cols] Table without parens", async () => {
     expect(norm(await raToSQL("π[name] Person"))).toBe(
-      norm("SELECT name FROM (Person)")
+      norm("SELECT DISTINCT name FROM (Person)")
     );
   });
 
   it("should allow chained unary ops without parens", async () => {
     const sql = await raToSQL("π[name] σ[age > 20] Person");
-    expect(norm(sql)).toContain("SELECT name FROM");
+    expect(norm(sql)).toContain("SELECT DISTINCT name FROM");
     expect(norm(sql)).toContain("WHERE age > 20");
   });
 
   it("should handle the user's example without excessive parens", async () => {
     const sql = await raToSQL("π[person_id, name, city] σ[city = 'York' OR city = 'Bristol'] Person");
-    expect(norm(sql)).toContain("SELECT person_id, name, city FROM");
+    expect(norm(sql)).toContain("SELECT DISTINCT person_id, name, city FROM");
     expect(norm(sql)).toContain("WHERE");
     expect(norm(sql)).toContain("city = 'York'");
     expect(norm(sql)).toContain("city = 'Bristol'");
@@ -787,7 +787,7 @@ describe("parenthesis-free syntax", () => {
 
   it("should still work with parens for grouping binary ops", async () => {
     const sql = await raToSQL("π[name] (Person ∪ Student)");
-    expect(norm(sql)).toContain("SELECT name FROM");
+    expect(norm(sql)).toContain("SELECT DISTINCT name FROM");
     expect(norm(sql)).toContain("UNION");
   });
 
@@ -797,7 +797,7 @@ describe("parenthesis-free syntax", () => {
 
   it("should allow triple chain without parens", async () => {
     const sql = await raToSQL("π[name] σ[age > 20] ρ[n→name] Person");
-    expect(norm(sql)).toContain("SELECT name FROM");
+    expect(norm(sql)).toContain("SELECT DISTINCT name FROM");
     expect(norm(sql)).toContain("WHERE age > 20");
     expect(norm(sql)).toContain("n AS name");
   });
@@ -908,6 +908,17 @@ describe("SQLite execution", () => {
     const res = await execRA("π[name, city](Person)");
     expect(res[0].columns).toEqual(["name", "city"]);
     expect(res[0].values.length).toBe(3);
+  });
+
+  it("π eliminates duplicate tuples (set semantics)", async () => {
+    // Person × Student produces each Person.city twice (once per Student row), so the
+    // cross product has 6 rows. Projecting city must collapse the duplicates down to the
+    // 3 distinct cities — π follows relational-algebra set semantics, not SQL bag semantics.
+    const cross = await execRA("Person × Student");
+    expect(cross[0].values.length).toBe(6);
+    const projected = await execRA("π[city](Person × Student)");
+    expect(projected[0].columns).toEqual(["city"]);
+    expect(projected[0].values.length).toBe(3);
   });
 
   // ── Rename ──
