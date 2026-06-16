@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-06-14 - More varied people in the database
+The database now includes people who are neither students nor teachers. Some solutions that assumed every person is a student or a teacher will no longer be accepted.
+
 ## 2026-03-19 - Changelog added
 A changelog has been added to the app to keep you updated on new features and bug fixes.
 
