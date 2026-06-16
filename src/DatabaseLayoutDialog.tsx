@@ -9,11 +9,11 @@ import dbLayoutLightFallback from "./db_layout_light.svg";
 import dbLayoutLightPngFallback from "./db_layout_light_bg.png";
 
 const DatabaseLayoutDialog = ({ isDarkMode }: { isDarkMode: () => boolean }) => {
-  const { lang, t } = useLanguage();
+  const { lang, engine, t } = useLanguage();
   const [open, setOpen] = useState(false);
 
-  // Try language-specific ERD, fallback to static imports
-  const basePath = `/languages/${lang}`;
+  // Use engine-specific ERD path (PostgreSQL ERDs are in {lang}-pg/)
+  const basePath = engine === "postgresql" ? `/languages/${lang}-pg` : `/languages/${lang}`;
   const darkSrc = `${basePath}/db_layout_dark.svg`;
   const lightSrc = `${basePath}/db_layout_light.svg`;
   const lightPngSrc = `${basePath}/db_layout_light_bg.png`;

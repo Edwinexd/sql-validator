@@ -3,6 +3,8 @@ import react from "@vitejs/plugin-react";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
 import path from "path";
 
+const emptyShim = path.resolve(__dirname, "src/shims/empty.ts");
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -28,6 +30,13 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // PGLite imports these Node subpaths which polyfill mocks don't support.
+      // PGLite detects browser environment and doesn't actually use them.
+      "stream/promises": emptyShim,
+      "fs/promises": emptyShim,
     },
+  },
+  optimizeDeps: {
+    exclude: ["@electric-sql/pglite"],
   },
 });

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-06-14 - PostgreSQL engine
+You can now choose between SQLite and PostgreSQL in the menu above the schema. PostgreSQL gives proper data types. The editor also gained autocomplete for table and column names.
+
+## 2026-06-14 - Relational algebra mode
+You can now answer questions with relational algebra instead of SQL. Use the SQL/RA toggle to switch. Expressions are converted to SQL and run the same way, and the generated SQL is shown for reference.
+
+## 2026-06-14 - More varied people in the database
+The database now includes people who are neither students nor teachers. Some solutions that assumed every person is a student or a teacher will no longer be accepted.
+
 ## 2026-03-19 - Changelog added
 A changelog has been added to the app to keep you updated on new features and bug fixes.
 
