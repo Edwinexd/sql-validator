@@ -431,6 +431,7 @@ const sv: LanguageDefinition = {
     modeRA: "Relationsalgebra",
     generatedSQL: "Genererad SQL",
     raParseError: "Relationsalgebra-fel: {{message}}",
+    engineLoadFailed: "Kunde inte ladda PostgreSQL-motorn. Återgår till SQLite.",
     raPlaceholder: "-- Skriv ett relationsalgebrauttryck\n-- Klicka på 'RA-referens' för syntax",
     raReference: "Relationsalgebrareferens",
     raUnaryOps: "Unära operatorer",
@@ -461,6 +462,12 @@ const sv: LanguageDefinition = {
     raNoteAssignment: "Sista tilldelningen returneras automatiskt",
     raConditions: "Villkor",
     raNoteComparison: "Jämförelseoperatorer: = <> < > <= >=",
+    editorSettings: "Editorinställningar",
+    settingAutocomplete: "Autokomplettering",
+    settingLineNumbers: "Radnummer",
+    settingHighlightActiveLine: "Markera aktiv rad",
+    sqlReferencePostgresql: "PostgreSQL-dokumentation",
+    engineMismatchWarning: "Varning: Denna sparfil skapades med en annan databasmotor ({{fileEngine}}). Import kan orsaka problem.",
   },
 };
 
