@@ -33,8 +33,10 @@ const ExportRenderer = React.forwardRef<HTMLDivElement, ExportRendererProps>(({ 
   }
 
   return (
-  // intentionally fixed width since we render a png of it
-    <div style={{ backgroundColor: "#efefef", color: "#313131" }} className="flex flex-col items-center p-[64px] w-[1024px]" ref={ref}>
+  // 1024px is a minimum, not a hard width: a wide result table grows the
+  // container (and its background) instead of overflowing it. Rendered
+  // off-screen so the max-content width never disturbs the page layout.
+    <div style={{ backgroundColor: "#efefef", color: "#313131", position: "absolute", left: "-99999px", top: 0 }} className="flex flex-col items-center p-[64px] min-w-[1024px] w-max" ref={ref}>
       {query &&
                 <>
                   <div className="flex my-3 text-xl font-semibold space-x-4">
@@ -76,7 +78,7 @@ const ExportRenderer = React.forwardRef<HTMLDivElement, ExportRendererProps>(({ 
       {view &&
                 <p className="break-words max-w-4xl mb-4 font-semibold text-left text-xl p-2 italic">{t("exportViewResultLabel", { name: view.view.name })}</p>
       }
-      <div className="max-w-full mb-[16px]">
+      <div className="mb-[16px]">
         <ResultTable result={
           query ? query.result : view!.result
         } forceLight={true} forceFixedSizes={true}

@@ -52,7 +52,14 @@ const ResultTable: React.FC<ResultTableProps> = ({ result, forceLight, forceFixe
   }
   return (
     <>
-      <Table className={`table-auto ${maybeFixedSizes("text-sm")} border-collapse`}>
+      <Table
+        // For PNG export we must not clip the table inside an overflow-auto
+        // scroll container: html-to-image bakes the scrollbar and the clipped
+        // (scrolled) state into the image, and scrollbar width/font metrics
+        // vary per platform. Let it size to its full natural width instead.
+        containerClassName={forceFixedSizes ? "overflow-visible w-max max-w-none" : undefined}
+        className={`table-auto ${maybeFixedSizes("text-sm")} border-collapse`}
+      >
         <TableHeader>
           <TableRow>
             {columns.map((col, i) => (

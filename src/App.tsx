@@ -765,10 +765,10 @@ function App() {
     // View
     if (exportView) {
       toPng(exportRendererRef.current, {
-        canvasWidth: exportRendererRef.current.clientWidth,
-        width: exportRendererRef.current.clientWidth,
-        canvasHeight: exportRendererRef.current.clientHeight,
-        height: exportRendererRef.current.clientHeight,
+        canvasWidth: exportRendererRef.current.scrollWidth,
+        width: exportRendererRef.current.scrollWidth,
+        canvasHeight: exportRendererRef.current.scrollHeight,
+        height: exportRendererRef.current.scrollHeight,
         pixelRatio: 1
       }).then((dataUrl) => {
         triggerDownload(dataUrl, `validator_${exportView.name}.png`);
@@ -785,10 +785,10 @@ function App() {
 
     const exportRenderer = exportRendererRef.current;
     toPng(exportRenderer, {
-      canvasWidth: exportRenderer.clientWidth,
-      width: exportRenderer.clientWidth,
-      canvasHeight: exportRenderer.clientHeight,
-      height: exportRenderer.clientHeight,
+      canvasWidth: exportRenderer.scrollWidth,
+      width: exportRenderer.scrollWidth,
+      canvasHeight: exportRenderer.scrollHeight,
+      height: exportRenderer.scrollHeight,
       pixelRatio: 1
     }).then((dataUrl) => {
       triggerDownload(dataUrl, `validator_${question.id}_${question.category.display_number}${question.display_sequence}.png`);
