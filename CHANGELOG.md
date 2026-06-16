@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-06-14 - PostgreSQL engine
+You can now choose between SQLite and PostgreSQL in the menu above the schema. PostgreSQL gives proper data types. The editor also gained autocomplete for table and column names.
+
 ## 2026-03-19 - Changelog added
 A changelog has been added to the app to keep you updated on new features and bug fixes.
 

@@ -7,6 +7,7 @@ export interface ParsedSaveData {
   correctQuestionIds: number[];
   views: View[];
   language: string;
+  engine: string;
 }
 
 export interface MergeConflict {
@@ -40,6 +41,11 @@ export function parseImportFile(data: string): ParsedSaveData {
   );
   const commentLangMatch = data.match(/^-- Language: (\w+)$/m);
   const language = structuredLangMatch ? structuredLangMatch[1] : (commentLangMatch ? commentLangMatch[1] : "sv");
+
+  const structuredEngineMatch = data.match(
+    /\/\*\s--- BEGIN Save Engine --- \*\/\n--\s(\w+)\n\/\*\s--- END Save Engine --- \*\//
+  );
+  const engine = structuredEngineMatch ? structuredEngineMatch[1] : "sqlite";
 
   const rawQueriesMatch = data.match(
     /\/\*\s--- BEGIN Raw Queries --- \*\/\n\/\*\n([\s\S]*?)\n\*\/\n\/\*\s--- END Raw Queries --- \*\//
@@ -78,11 +84,11 @@ export function parseImportFile(data: string): ParsedSaveData {
     }
   }
 
-  return { rawQueries, correctQueries, writtenQuestionIds, correctQuestionIds, views, language };
+  return { rawQueries, correctQueries, writtenQuestionIds, correctQuestionIds, views, language, engine };
 }
 
-export function getLocalData(langPrefix: string = "sv"): ParsedSaveData {
-  const pfx = `${langPrefix}:`;
+export function getLocalData(lang: string = "sv", engine: string = "sqlite"): ParsedSaveData {
+  const pfx = `${lang}:${engine}:`;
   const writtenQuestionIds: number[] = JSON.parse(
     localStorage.getItem(`${pfx}writtenQuestions`) || "[]"
   );
@@ -104,7 +110,7 @@ export function getLocalData(langPrefix: string = "sv"): ParsedSaveData {
 
   const views: View[] = JSON.parse(localStorage.getItem(`${pfx}views`) || "[]");
 
-  return { rawQueries, correctQueries, writtenQuestionIds, correctQuestionIds, views, language: langPrefix };
+  return { rawQueries, correctQueries, writtenQuestionIds, correctQuestionIds, views, language: lang, engine };
 }
 
 export function detectConflicts(
@@ -281,5 +287,5 @@ export function buildMergedData(
     new Set([...local.correctQuestionIds, ...imported.correctQuestionIds])
   ).filter((id) => String(id) in correctQueries);
 
-  return { rawQueries, correctQueries, writtenQuestionIds, correctQuestionIds, views, language: local.language };
+  return { rawQueries, correctQueries, writtenQuestionIds, correctQuestionIds, views, language: local.language, engine: local.engine };
 }

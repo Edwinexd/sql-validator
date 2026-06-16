@@ -2,6 +2,9 @@
 
 # dependencies
 /node_modules
+
+# generated
+/public/licenses.json
 /.pnp
 .pnp.js
 
@@ -35,6 +38,7 @@ scripts/*
 !scripts/generate-language.ts
 !scripts/extract-oracle.ts
 !scripts/generate-erd.ts
+!scripts/generate-licenses.ts
 !scripts/hooks/
 
 data/*
