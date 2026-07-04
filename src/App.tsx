@@ -52,6 +52,7 @@ import ExportSelectorModal, { ExportSelectorModalHandle } from "./ExportSelector
 import ImportDialog, { ImportDialogHandle } from "./ImportDialog";
 import { ParsedSaveData, parseImportFile, getLocalData, detectConflicts } from "./mergeUtils";
 import { useLanguage, langKey, getUrlParam, setUrlParam } from "./i18n/context";
+import { asset, storage } from "./storage";
 import LanguageSelector from "./LanguageSelector";
 import { getQuestion } from "./QuestionSelector";
 
@@ -87,50 +88,50 @@ function App() {
 
   // QuestionSelector needs writtenQuestions and correctQuestions to be able to display the correct state
   const [writtenQuestions, setWrittenQuestions] = useState<number[]>(
-    localStorage.getItem(langKey(lang, "writtenQuestions")) ? JSON.parse(localStorage.getItem(langKey(lang, "writtenQuestions"))!) : []
+    storage.getItem(langKey(lang, "writtenQuestions")) ? JSON.parse(storage.getItem(langKey(lang, "writtenQuestions"))!) : []
   );
   const [correctQuestions, setCorrectQuestions] = useState<number[]>(
-    localStorage.getItem(langKey(lang, "correctQuestions")) ? JSON.parse(localStorage.getItem(langKey(lang, "correctQuestions"))!) : []
+    storage.getItem(langKey(lang, "correctQuestions")) ? JSON.parse(storage.getItem(langKey(lang, "correctQuestions"))!) : []
   );
 
   // One-time migration: copy old unnamespaced keys to sv: prefix
   useEffect(() => {
-    if (localStorage.getItem("i18n-migrated")) return;
-    const oldWritten = localStorage.getItem("writtenQuestions");
-    if (oldWritten && !localStorage.getItem(langKey("sv", "writtenQuestions"))) {
-      localStorage.setItem(langKey("sv", "writtenQuestions"), oldWritten);
+    if (storage.getItem("i18n-migrated")) return;
+    const oldWritten = storage.getItem("writtenQuestions");
+    if (oldWritten && !storage.getItem(langKey("sv", "writtenQuestions"))) {
+      storage.setItem(langKey("sv", "writtenQuestions"), oldWritten);
       const ids: number[] = JSON.parse(oldWritten);
       for (const id of ids) {
-        const q = localStorage.getItem(`questionId-${id}`);
-        if (q) localStorage.setItem(langKey("sv", `questionId-${id}`), q);
+        const q = storage.getItem(`questionId-${id}`);
+        if (q) storage.setItem(langKey("sv", `questionId-${id}`), q);
       }
     }
-    const oldCorrect = localStorage.getItem("correctQuestions");
-    if (oldCorrect && !localStorage.getItem(langKey("sv", "correctQuestions"))) {
-      localStorage.setItem(langKey("sv", "correctQuestions"), oldCorrect);
+    const oldCorrect = storage.getItem("correctQuestions");
+    if (oldCorrect && !storage.getItem(langKey("sv", "correctQuestions"))) {
+      storage.setItem(langKey("sv", "correctQuestions"), oldCorrect);
       const ids: number[] = JSON.parse(oldCorrect);
       for (const id of ids) {
-        const q = localStorage.getItem(`correctQuestionId-${id}`);
-        if (q) localStorage.setItem(langKey("sv", `correctQuestionId-${id}`), q);
+        const q = storage.getItem(`correctQuestionId-${id}`);
+        if (q) storage.setItem(langKey("sv", `correctQuestionId-${id}`), q);
       }
     }
-    const oldViews = localStorage.getItem("views");
-    if (oldViews && !localStorage.getItem(langKey("sv", "views"))) {
-      localStorage.setItem(langKey("sv", "views"), oldViews);
+    const oldViews = storage.getItem("views");
+    if (oldViews && !storage.getItem(langKey("sv", "views"))) {
+      storage.setItem(langKey("sv", "views"), oldViews);
     }
-    localStorage.setItem("i18n-migrated", "1");
+    storage.setItem("i18n-migrated", "1");
   }, []);
 
   // Reload written/correct questions when language changes
   useEffect(() => {
     setWrittenQuestions(
-      localStorage.getItem(langKey(lang, "writtenQuestions"))
-        ? JSON.parse(localStorage.getItem(langKey(lang, "writtenQuestions"))!)
+      storage.getItem(langKey(lang, "writtenQuestions"))
+        ? JSON.parse(storage.getItem(langKey(lang, "writtenQuestions"))!)
         : []
     );
     setCorrectQuestions(
-      localStorage.getItem(langKey(lang, "correctQuestions"))
-        ? JSON.parse(localStorage.getItem(langKey(lang, "correctQuestions"))!)
+      storage.getItem(langKey(lang, "correctQuestions"))
+        ? JSON.parse(storage.getItem(langKey(lang, "correctQuestions"))!)
         : []
     );
   }, [lang]);
@@ -148,7 +149,7 @@ function App() {
     if (!dbArrayBuffer) return;
     resetResult();
     const SQL = await initSqlJs({
-      locateFile: (file) => `/dist/sql.js/${file}`,
+      locateFile: (file) => asset(`dist/sql.js/${file}`),
     });
     const db = new SQL.Database(new Uint8Array(dbArrayBuffer));
     db.create_function("YEAR", (date: string) => new Date(date).getFullYear());
@@ -190,7 +191,7 @@ function App() {
         const resolved = getQuestion(q.id, questions);
         if (resolved) {
           setQuestion(resolved);
-          setQuery(localStorage.getItem(langKey(lang, "questionId-" + resolved.id)) || defaultQuery);
+          setQuery(storage.getItem(langKey(lang, "questionId-" + resolved.id)) || defaultQuery);
         }
       }
     }
@@ -220,22 +221,22 @@ function App() {
     if (questionLangRef.current !== lang) {
       return;
     }
-    let wq = JSON.parse(localStorage.getItem(langKey(lang, "writtenQuestions")) || "[]");
+    let wq = JSON.parse(storage.getItem(langKey(lang, "writtenQuestions")) || "[]");
     const initialLength = wq.length;
     if (query === defaultQuery || query === "") {
-      localStorage.removeItem(langKey(lang, "questionId-" + question.id));
+      storage.removeItem(langKey(lang, "questionId-" + question.id));
       // remove from writtenQuestions if it exists there as well
       const filtered = wq.filter((id: number) => id !== question.id);
       wq = filtered;
     } else {
-      localStorage.setItem(langKey(lang, "questionId-" + question.id), query);
+      storage.setItem(langKey(lang, "questionId-" + question.id), query);
       // ensure that questionid is in localstorage writtenQuestions
       if (!wq.includes(question.id)) {
         wq.push(question.id);
       }
     }
     if (wq.length !== initialLength) {
-      localStorage.setItem(langKey(lang, "writtenQuestions"), JSON.stringify(wq));
+      storage.setItem(langKey(lang, "writtenQuestions"), JSON.stringify(wq));
       setWrittenQuestions(wq);
     }
 
@@ -275,13 +276,13 @@ function App() {
     }
 
     if (upsert) {
-      localStorage.setItem(langKey(lang, "views"), JSON.stringify(fetchedViews));
+      storage.setItem(langKey(lang, "views"), JSON.stringify(fetchedViews));
     }
 
     setViews(fetchedViews);
 
     // Recreate missing views from localStorage
-    const storedViews = localStorage.getItem(langKey(lang, "views"));
+    const storedViews = storage.getItem(langKey(lang, "views"));
     if (storedViews) {
       const savedViews: View[] = JSON.parse(storedViews);
       const missingViews = savedViews.filter(
@@ -406,21 +407,21 @@ function App() {
     setIsCorrect(true);
     setMatchedResult(matchedAlt ?? question.evaluable_result);
 
-    localStorage.setItem(langKey(lang, `correctQuestionId-${question.id}`), query);
+    storage.setItem(langKey(lang, `correctQuestionId-${question.id}`), query);
     setCorrectQueryMismatch(false);
     setLoadedQuestionCorrect(true);
 
-    const cq = JSON.parse(localStorage.getItem(langKey(lang, "correctQuestions")) || "[]");
+    const cq = JSON.parse(storage.getItem(langKey(lang, "correctQuestions")) || "[]");
     if (!cq.includes(question.id)) {
       cq.push(question.id);
-      localStorage.setItem(langKey(lang, "correctQuestions"), JSON.stringify(cq));
+      storage.setItem(langKey(lang, "correctQuestions"), JSON.stringify(cq));
       setCorrectQuestions(cq);
     }
   }, [result, question, query, evaluatedQuery, exportingStatus, lang]);
 
   // Save query based on question
   const loadQuery = useCallback((_oldQuestion: Question | undefined, newQuestion: Question) => {
-    setQuery(localStorage.getItem(langKey(lang, "questionId-" + newQuestion.id)) || defaultQuery);
+    setQuery(storage.getItem(langKey(lang, "questionId-" + newQuestion.id)) || defaultQuery);
     // This prevents user from ctrl-z'ing to a different question
     if (editorRef.current) {
       editorRef.current!.session = {history: { stack: [], offset: 0 }};
@@ -433,7 +434,7 @@ function App() {
       return;
     }
 
-    const correctQuery = localStorage.getItem(langKey(lang, `correctQuestionId-${question.id}`));
+    const correctQuery = storage.getItem(langKey(lang, `correctQuestionId-${question.id}`));
     if (!correctQuery) {
       setCorrectQueryMismatch(false);
       setLoadedQuestionCorrect(false);
@@ -493,7 +494,7 @@ function App() {
     output += "/* --- BEGIN Validation --- */\n";
 
     output += "/* --- BEGIN Submission Summary --- */\n";
-    const writtenQueries = localStorage.getItem(langKey(lang, "correctQuestions")) || "[]";
+    const writtenQueries = storage.getItem(langKey(lang, "correctQuestions")) || "[]";
     const parsed = JSON.parse(writtenQueries) as number[];
     const questionsString = parsed.filter((id) => options === undefined || (options.include && options.include.includes(id))).map((id) => {
       const category = questions.find(c => c.questions.some(q => q.id === id))!;
@@ -522,7 +523,7 @@ function App() {
     }
     output += "/* --- BEGIN Submission Queries --- */\n";
 
-    const queriesStr = localStorage.getItem(langKey(lang, "correctQuestions"));
+    const queriesStr = storage.getItem(langKey(lang, "correctQuestions"));
     if (queriesStr) {
       const parsed = JSON.parse(queriesStr) as number[];
       const sorted = parsed.filter((id) => options === undefined || (options.include && options.include.includes(id))).map((id) => {
@@ -534,7 +535,7 @@ function App() {
       const questionQueries = sorted.map((id: number) => {
         const category = questions.find(c => c.questions.some(q => q.id === id))!;
         const q = category.questions.find(q => q.id === id)!;
-        const activeQuery = localStorage.getItem(langKey(lang, "correctQuestionId-" + id));
+        const activeQuery = storage.getItem(langKey(lang, "correctQuestionId-" + id));
         if (!activeQuery) {
           return "";
         }
@@ -556,7 +557,7 @@ function App() {
     output += "/* --- END Submission Queries --- */\n";
 
     output += "/* --- BEGIN Save Summary --- */\n";
-    const existingQueries = localStorage.getItem(langKey(lang, "writtenQuestions")) || "[]";
+    const existingQueries = storage.getItem(langKey(lang, "writtenQuestions")) || "[]";
     const existingParsed = JSON.parse(existingQueries) as number[];
     const existingQuestions = existingParsed.map((id) => {
       const category = questions.find(c => c.questions.some(q => q.id === id))!;
@@ -567,12 +568,12 @@ function App() {
     output += "/* --- END Save Summary --- */\n";
     output += "/* --- BEGIN Raw Queries --- */\n";
     output += "/*\n";
-    const allQueries = localStorage.getItem(langKey(lang, "writtenQuestions"));
+    const allQueries = storage.getItem(langKey(lang, "writtenQuestions"));
     if (allQueries) {
       const parsed = JSON.parse(allQueries);
       const queries: { [key: number]: string } = {};
       for (const id of parsed) {
-        const activeQuery = localStorage.getItem(langKey(lang, "questionId-" + id));
+        const activeQuery = storage.getItem(langKey(lang, "questionId-" + id));
         if (!activeQuery) {
           continue;
         }
@@ -584,12 +585,12 @@ function App() {
     output += "/* --- END Raw Queries --- */\n";
     output += "/* --- BEGIN Correct Raw Queries --- */\n";
     output += "/*\n";
-    const allCorrectQueries = localStorage.getItem(langKey(lang, "correctQuestions"));
+    const allCorrectQueries = storage.getItem(langKey(lang, "correctQuestions"));
     if (allCorrectQueries) {
       const parsed = JSON.parse(allCorrectQueries);
       const queries: { [key: number]: string } = {};
       for (const id of parsed) {
-        const activeQuery = localStorage.getItem(langKey(lang, "correctQuestionId-" + id));
+        const activeQuery = storage.getItem(langKey(lang, "correctQuestionId-" + id));
         if (!activeQuery) {
           continue;
         }
@@ -600,9 +601,9 @@ function App() {
     output += "\n*/\n";
     output += "/* --- END Correct Raw Queries --- */\n";
     output += "/* --- BEGIN Raw List Dumps --- */\n";
-    output += "-- " + (localStorage.getItem(langKey(lang, "writtenQuestions")) === null ? "[]" : localStorage.getItem(langKey(lang, "writtenQuestions"))) + "\n";
-    output += "-- " + (localStorage.getItem(langKey(lang, "correctQuestions")) === null ? "[]" :
-      JSON.stringify((JSON.parse(localStorage.getItem(langKey(lang, "correctQuestions"))!) as number[])
+    output += "-- " + (storage.getItem(langKey(lang, "writtenQuestions")) === null ? "[]" : storage.getItem(langKey(lang, "writtenQuestions"))) + "\n";
+    output += "-- " + (storage.getItem(langKey(lang, "correctQuestions")) === null ? "[]" :
+      JSON.stringify((JSON.parse(storage.getItem(langKey(lang, "correctQuestions"))!) as number[])
         .filter((id) => options === undefined || (options.include && options.include.includes(id))))
     ) + "\n";
     output += "/* --- END Raw List Dumps --- */\n";
@@ -629,28 +630,28 @@ function App() {
 
   const applyMergedData = useCallback((merged: ParsedSaveData) => {
     // Clear current data
-    const oldWritten: number[] = JSON.parse(localStorage.getItem(langKey(lang, "writtenQuestions")) || "[]");
-    oldWritten.forEach(id => localStorage.removeItem(langKey(lang, `questionId-${id}`)));
-    const oldCorrect: number[] = JSON.parse(localStorage.getItem(langKey(lang, "correctQuestions")) || "[]");
-    oldCorrect.forEach(id => localStorage.removeItem(langKey(lang, `correctQuestionId-${id}`)));
-    localStorage.removeItem(langKey(lang, "writtenQuestions"));
-    localStorage.removeItem(langKey(lang, "correctQuestions"));
+    const oldWritten: number[] = JSON.parse(storage.getItem(langKey(lang, "writtenQuestions")) || "[]");
+    oldWritten.forEach(id => storage.removeItem(langKey(lang, `questionId-${id}`)));
+    const oldCorrect: number[] = JSON.parse(storage.getItem(langKey(lang, "correctQuestions")) || "[]");
+    oldCorrect.forEach(id => storage.removeItem(langKey(lang, `correctQuestionId-${id}`)));
+    storage.removeItem(langKey(lang, "writtenQuestions"));
+    storage.removeItem(langKey(lang, "correctQuestions"));
 
     // Write merged data
     for (const [key, value] of Object.entries(merged.rawQueries)) {
-      localStorage.setItem(langKey(lang, `questionId-${key}`), value);
+      storage.setItem(langKey(lang, `questionId-${key}`), value);
       if (question !== undefined && Number(key) === question.id) {
         setQuery(value);
       }
     }
     for (const [key, value] of Object.entries(merged.correctQueries)) {
-      localStorage.setItem(langKey(lang, `correctQuestionId-${key}`), value);
+      storage.setItem(langKey(lang, `correctQuestionId-${key}`), value);
     }
 
     setWrittenQuestions(merged.writtenQuestionIds);
     setCorrectQuestions(merged.correctQuestionIds);
-    localStorage.setItem(langKey(lang, "writtenQuestions"), JSON.stringify(merged.writtenQuestionIds));
-    localStorage.setItem(langKey(lang, "correctQuestions"), JSON.stringify(merged.correctQuestionIds));
+    storage.setItem(langKey(lang, "writtenQuestions"), JSON.stringify(merged.writtenQuestionIds));
+    storage.setItem(langKey(lang, "correctQuestions"), JSON.stringify(merged.correctQuestionIds));
 
     // Update views in database
     for (const view of views) {
@@ -711,7 +712,7 @@ function App() {
       return;
     }
 
-    const toExportQuery = localStorage.getItem(langKey(lang, `correctQuestionId-${question.id}`));
+    const toExportQuery = storage.getItem(langKey(lang, `correctQuestionId-${question.id}`));
     if (!toExportQuery) {
       return;
     }
@@ -894,7 +895,7 @@ function App() {
                 variant="outline"
                 onClick={() => {
                   if (!question) return;
-                  setQuery(localStorage.getItem(langKey(lang, `correctQuestionId-${question.id}`)) || defaultQuery);
+                  setQuery(storage.getItem(langKey(lang, `correctQuestionId-${question.id}`)) || defaultQuery);
                 }}
                 className="border-yellow-500 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20"
               >

@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { AVAILABLE_LANGUAGES, DEFAULT_LANGUAGE } from "./languages";
 import { uiStrings } from "./ui-strings";
+import { asset, storage } from "../storage";
 
 export interface QuestionCategory {
   category_id: number;
@@ -45,7 +46,7 @@ function getInitialLanguage(): string {
     return urlLang;
   }
   // 2. localStorage
-  const stored = localStorage.getItem("language");
+  const stored = storage.getItem("language");
   if (stored && AVAILABLE_LANGUAGES.some(l => l.code === stored)) {
     return stored;
   }
@@ -80,8 +81,8 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const loadLanguageData = useCallback(async (langCode: string) => {
     try {
       const [qpResponse, dbResponse] = await Promise.all([
-        fetch(`/languages/${langCode}/questionpool.json`),
-        fetch(`/languages/${langCode}/data.sqlite3`),
+        fetch(asset(`languages/${langCode}/questionpool.json`)),
+        fetch(asset(`languages/${langCode}/data.sqlite3`)),
       ]);
 
       if (!qpResponse.ok || !dbResponse.ok) {
@@ -108,7 +109,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const setLang = useCallback((newLang: string) => {
     if (!AVAILABLE_LANGUAGES.some(l => l.code === newLang)) return;
-    localStorage.setItem("language", newLang);
+    storage.setItem("language", newLang);
     updateUrlParam("lang", newLang);
     setLangState(newLang);
   }, []);

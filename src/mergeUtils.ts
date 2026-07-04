@@ -1,4 +1,5 @@
 import { View } from "./ViewsTable";
+import { storage } from "./storage";
 
 export interface ParsedSaveData {
   rawQueries: Record<string, string>;
@@ -84,25 +85,25 @@ export function parseImportFile(data: string): ParsedSaveData {
 export function getLocalData(langPrefix: string = "sv"): ParsedSaveData {
   const pfx = `${langPrefix}:`;
   const writtenQuestionIds: number[] = JSON.parse(
-    localStorage.getItem(`${pfx}writtenQuestions`) || "[]"
+    storage.getItem(`${pfx}writtenQuestions`) || "[]"
   );
   const correctQuestionIds: number[] = JSON.parse(
-    localStorage.getItem(`${pfx}correctQuestions`) || "[]"
+    storage.getItem(`${pfx}correctQuestions`) || "[]"
   );
 
   const rawQueries: Record<string, string> = {};
   for (const id of writtenQuestionIds) {
-    const q = localStorage.getItem(`${pfx}questionId-${id}`);
+    const q = storage.getItem(`${pfx}questionId-${id}`);
     if (q) rawQueries[String(id)] = q;
   }
 
   const correctQueries: Record<string, string> = {};
   for (const id of correctQuestionIds) {
-    const q = localStorage.getItem(`${pfx}correctQuestionId-${id}`);
+    const q = storage.getItem(`${pfx}correctQuestionId-${id}`);
     if (q) correctQueries[String(id)] = q;
   }
 
-  const views: View[] = JSON.parse(localStorage.getItem(`${pfx}views`) || "[]");
+  const views: View[] = JSON.parse(storage.getItem(`${pfx}views`) || "[]");
 
   return { rawQueries, correctQueries, writtenQuestionIds, correctQuestionIds, views, language: langPrefix };
 }

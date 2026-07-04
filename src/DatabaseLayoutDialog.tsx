@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { X } from "lucide-react";
 import { useLanguage } from "./i18n/context";
+import { asset } from "./storage";
 
 // Keep static imports as fallback for Swedish (backwards compat with existing SVGs)
 import dbLayoutDarkFallback from "./db_layout_dark.svg";
@@ -13,7 +14,7 @@ const DatabaseLayoutDialog = ({ isDarkMode }: { isDarkMode: () => boolean }) => 
   const [open, setOpen] = useState(false);
 
   // Try language-specific ERD, fallback to static imports
-  const basePath = `/languages/${lang}`;
+  const basePath = asset(`languages/${lang}`);
   const darkSrc = `${basePath}/db_layout_dark.svg`;
   const lightSrc = `${basePath}/db_layout_light.svg`;
   const lightPngSrc = `${basePath}/db_layout_light_bg.png`;

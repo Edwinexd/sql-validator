@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-07-04 - Pinned versions by date
+Older course material can now link to a frozen version of the validator at /compatibility/<date>/. Each dated version keeps its own question bank, data, and saved work, unaffected by later changes to the live site.
+
 ## 2026-03-19 - Changelog added
 A changelog has been added to the app to keep you updated on new features and bug fixes.
 

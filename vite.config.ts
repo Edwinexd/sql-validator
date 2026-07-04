@@ -4,7 +4,10 @@ import { nodePolyfills } from "vite-plugin-node-polyfills";
 import path from "path";
 
 // https://vite.dev/config/
+// APP_BASE is set per compatibility snapshot by scripts/build-deploy.mjs so each
+// dated build is served (and isolated) under /compatibility/<date>/. Unset = "/".
 export default defineConfig({
+  base: process.env.APP_BASE || "/",
   plugins: [
     react(),
     nodePolyfills({

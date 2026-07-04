@@ -1,11 +1,12 @@
 // useTheme.ts
 import { useState, useEffect, useCallback } from "react";
+import { storage } from "./storage";
 
 const useTheme = () => {
   const [theme, setThemeState] = useState<"light" | "dark" | "system">("system");
 
   useEffect(() => {
-    const storedTheme = localStorage.theme as "light" | "dark" | "system";
+    const storedTheme = storage.getItem("theme") as "light" | "dark" | "system";
     if (storedTheme) {
       setThemeState(storedTheme);
     } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
@@ -15,7 +16,7 @@ const useTheme = () => {
     }
 
     const applyTheme = () => {
-      const isDark = localStorage.theme === "dark" || (!("theme" in localStorage) && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      const isDark = storage.getItem("theme") === "dark" || (!storage.has("theme") && window.matchMedia("(prefers-color-scheme: dark)").matches);
       if (isDark) {
         document.documentElement.classList.add("dark");
       } else {
@@ -43,9 +44,9 @@ const useTheme = () => {
   const setTheme = (theme: "light" | "dark" | "system") => {
     setThemeState(theme);
     if (theme === "system") {
-      localStorage.removeItem("theme");
+      storage.removeItem("theme");
     } else {
-      localStorage.theme = theme;
+      storage.setItem("theme", theme);
     }
 
     const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);

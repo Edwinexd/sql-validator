@@ -40,7 +40,9 @@
   "scripts": {
     "dev": "npm-run-all copy-sqljs start-vite",
     "start": "npm-run-all copy-sqljs start-vite",
-    "build": "npm-run-all copy-sqljs build-vite",
+    "build": "node scripts/build-deploy.mjs",
+    "build:app": "npm-run-all copy-sqljs build-vite",
+    "compat:cut": "node scripts/compat-cut.mjs",
     "preview": "vite preview",
     "copy-sqljs": "copyfiles -f node_modules/sql.js/dist/sql-wasm.wasm public/dist/sql.js/",
     "start-vite": "vite",

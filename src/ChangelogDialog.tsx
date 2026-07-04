@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "./i18n/context";
+import { storage } from "./storage";
 import changelogRaw from "../CHANGELOG.md?raw";
 
 interface ChangelogEntry {
@@ -35,9 +36,9 @@ const ChangelogDialog = () => {
 
   useEffect(() => {
     if (entries.length === 0) return;
-    const lastSeen = localStorage.getItem(CHANGELOG_VERSION_KEY);
+    const lastSeen = storage.getItem(CHANGELOG_VERSION_KEY);
     if (!lastSeen) {
-      localStorage.setItem(CHANGELOG_VERSION_KEY, entries[0].date);
+      storage.setItem(CHANGELOG_VERSION_KEY, entries[0].date);
     } else if (lastSeen < entries[0].date) {
       setHasNew(true);
     }
@@ -47,7 +48,7 @@ const ChangelogDialog = () => {
     setOpen(true);
     setHasNew(false);
     if (entries.length > 0) {
-      localStorage.setItem(CHANGELOG_VERSION_KEY, entries[0].date);
+      storage.setItem(CHANGELOG_VERSION_KEY, entries[0].date);
     }
   };
 

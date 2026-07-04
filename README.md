@@ -16,6 +16,25 @@ SQL Validator is a fully client-side web application powered by sql.js. Designed
 ### Public Deployment
 A public instance of SQL Validator is available at [https://sql-validator.e-su.se](https://sql-validator.e-su.se), powered with Cloudflare Pages.
 
+### Compatibility Dates
+Course material is written against a specific version of the validator (its question bank, generated data, and behavior). To keep older material reproducible when the app changes, the site also serves immutable, dated builds at `/compatibility/<YYYY-MM-DD>/`, e.g. [https://sql-validator.e-su.se/compatibility/2026-07-04/](https://sql-validator.e-su.se/compatibility/2026-07-04/).
+
+A dated build is frozen: its own code, question bank, and expected results, plus its own isolated `localStorage` (namespaced by the date via `src/storage.ts` so it never collides with the live app or other dates on the shared origin).
+
+Each date is an entry in `compatibility.json` (repo root) mapping the date to an immutable commit, e.g. `{ "2026-07-04": "<commit-sha>" }`. On every deploy, the normal build (`npm run build`, which runs `scripts/build-deploy.mjs`) rebuilds each pinned commit under its own base path and assembles the live root plus every snapshot into one `build/` output. The single-app build is `npm run build:app`. The live root at `/` always tracks `master`. No git tags are involved.
+
+**Cutting a new compatibility date:**
+1. With `master` checked out at the state to freeze, run:
+   ```
+   npm run compat:cut                      # pins today's date to HEAD
+   npm run compat:cut -- 2026-07-04 master # explicit date / ref
+   ```
+   This adds `"<date>": "<commit-sha>"` to `compatibility.json` (or edit the file by hand). Only pin commits that contain the compatibility machinery (`src/storage.ts`, the `APP_BASE` handling in `vite.config.ts`, and base-aware asset paths — this feature or later); the build skips a commit that predates it.
+2. Commit `compatibility.json` and push to `master`. The next deploy publishes `/compatibility/<date>/` automatically.
+3. Don't re-point a published date to a different commit — the dated URL is meant to be permanent (`compat:cut` refuses to move an existing date).
+
+**Cloudflare Pages settings:** unchanged — build command `npm run build`, output directory `build`. When snapshots are configured the build fetches the pinned commits, deepening a shallow clone automatically. A snapshot that fails to build is logged and skipped so the live site still deploys — watch the build log.
+
 ### Running Locally
 1. Clone the repository: `git clone https://github.com/Edwinexd/sql-validator.git`
 2. Install dependencies: `npm install`
