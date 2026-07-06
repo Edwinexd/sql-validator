@@ -19,8 +19,8 @@ const PROJECT_LICENSES = [
   },
   {
     name: "ra-engine (Relational Algebra)",
-    license: "BSL-1.1",
-    description: "The relational algebra engine (src/ra-engine/) is licensed under the Business Source License 1.1, converting to GPL-3.0 on 2035-03-20.",
+    license: "PolyForm-Noncommercial-1.0.0",
+    description: "The relational algebra engine (src/ra-engine/) is licensed under the PolyForm Noncommercial License 1.0.0: noncommercial use only, with attribution.",
     url: "https://github.com/Edwinexd/sql-validator/blob/master/src/ra-engine/LICENSE.md",
   },
 ];

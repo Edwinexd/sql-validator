@@ -2,7 +2,7 @@
 Relational Algebra engine for sql-validator
 Copyright (C) 2026 E.SU. IT AB (Org.no 559484-0505) and Edwin Sundberg <edwin@edthing.com>
 
-Licensed under the Business Source License 1.1 (the "License");
+Licensed under the PolyForm Noncommercial License 1.0.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License in the LICENSE.md file in this repository.
 */
