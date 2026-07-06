@@ -39,6 +39,7 @@ scripts/*
 !scripts/extract-oracle.ts
 !scripts/generate-erd.ts
 !scripts/generate-licenses.ts
+!scripts/check-line-endings.sh
 !scripts/hooks/
 
 data/*

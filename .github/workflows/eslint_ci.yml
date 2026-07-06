@@ -5,6 +5,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - name: Check line endings (LF)
+      run: bash scripts/check-line-endings.sh
     - name: Install modules
       run: npm install
     - name: Run ESLint

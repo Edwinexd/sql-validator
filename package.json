@@ -54,7 +54,8 @@
     "encrypt-oracle": "tsx scripts/encrypt-oracle.ts",
     "generate-erd": "tsx scripts/generate-erd.ts",
     "generate-licenses": "tsx scripts/generate-licenses.ts",
-    "generate-all": "tsx scripts/generate-language.ts --all --plain && tsx scripts/generate-erd.ts --all"
+    "generate-all": "tsx scripts/generate-language.ts --all --plain && tsx scripts/generate-erd.ts --all",
+    "lint:eol": "bash scripts/check-line-endings.sh"
   },
   "eslintConfig": {
     "extends": [
