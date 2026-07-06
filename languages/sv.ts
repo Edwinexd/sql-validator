@@ -444,7 +444,7 @@ const sv: LanguageDefinition = {
     generatedSQL: "Genererad SQL",
     raParseError: "Relationsalgebra-fel: {{message}}",
     engineLoadFailed: "Kunde inte ladda PostgreSQL-motorn. Återgår till SQLite.",
-    raPlaceholder: "-- Skriv ett relationsalgebrauttryck\n-- Klicka på 'RA-referens' för syntax",
+    raPlaceholder: "-- Skriv ett relationsalgebrauttryck\n-- Klicka på 'Relationsalgebrareferens' för syntax",
     raReference: "Relationsalgebrareferens",
     raUnaryOps: "Unära operatorer",
     raBinaryOps: "Binära operatorer",

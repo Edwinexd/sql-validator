@@ -444,7 +444,7 @@ const de: LanguageDefinition = {
     generatedSQL: "Generiertes SQL",
     raParseError: "Fehler in relationaler Algebra: {{message}}",
     engineLoadFailed: "Die PostgreSQL-Engine konnte nicht geladen werden. Wechsel zurück zu SQLite.",
-    raPlaceholder: "-- Schreibe einen Ausdruck der relationalen Algebra\n-- Klicke auf 'RA-Referenz' für die Syntax",
+    raPlaceholder: "-- Schreibe einen Ausdruck der relationalen Algebra\n-- Klicke auf 'Referenz relationale Algebra' für die Syntax",
     raReference: "Referenz relationale Algebra",
     raUnaryOps: "Unäre Operatoren",
     raBinaryOps: "Binäre Operatoren",

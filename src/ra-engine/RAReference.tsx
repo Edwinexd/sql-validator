@@ -9,7 +9,6 @@ You may obtain a copy of the License in the LICENSE.md file in this repository.
 
 import { useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { X } from "lucide-react";
 import { useLanguage } from "../i18n/context";
 
 const RAReference = () => {
@@ -26,11 +25,8 @@ const RAReference = () => {
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto p-6">
-          <div className="flex justify-between items-start mb-4">
+          <div className="mb-4">
             <h2 className="text-xl font-bold">{t("raReference")}</h2>
-            <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600">
-              <X className="w-5 h-5" />
-            </button>
           </div>
           <div className="space-y-5 text-sm">
             {/* Unary Operators */}
