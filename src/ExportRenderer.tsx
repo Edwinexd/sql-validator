@@ -1,13 +1,12 @@
 import React from "react";
-import Editor from "react-simple-code-editor";
 import { format } from "sql-formatter";
-// @ts-expect-error - No types available
-import { highlight, languages } from "prismjs/components/prism-core";
 import { Result } from "./utils";
 import ResultTable from "./ResultTable";
 import { Question } from "./QuestionSelector";
 import { View } from "./ViewsTable";
 import { useLanguage } from "./i18n/context";
+import { renderRAPreview } from "./ra-engine/RAPreview";
+import SqlEditor from "./SqlEditor";
 
 interface ExportRendererProps {
   query?: {
@@ -15,6 +14,7 @@ interface ExportRendererProps {
     isCorrect: boolean;
     code: string;
     result: Result;
+    mode?: "sql" | "ra";
   };
   view?: {
     view: View;
@@ -23,7 +23,8 @@ interface ExportRendererProps {
 }
 
 const ExportRenderer = React.forwardRef<HTMLDivElement, ExportRendererProps>(({ query, view }, ref) => {
-  const { t } = useLanguage();
+  const { t, engine } = useLanguage();
+  const formatterLang = engine === "postgresql" ? "postgresql" : "sqlite";
 
   if (!query && !view) {
     return null;
@@ -55,23 +56,30 @@ const ExportRenderer = React.forwardRef<HTMLDivElement, ExportRendererProps>(({ 
                   <p className="break-words max-w-4xl mb-4 font-semibold text-left text-xl p-2 italic">{t("exportViewCodeLabel", { name: view.view.name })}</p>
                 </>
       }
-      <Editor
-        readOnly={true}
-        value={format(
-          query ? query.code : view!.view.query, {
-            language: "sqlite",
-            tabWidth: 2,
-            useTabs: false,
-            keywordCase: "upper",
-            dataTypeCase: "upper",
-            functionCase: "upper",
-          })}
-        onValueChange={() => null}
-        highlight={code => highlight(code, languages.sql)}
-        padding={10}
-        tabSize={4}
-        className="font-mono text-xl w-full bg-slate-200 border-2 max-w-4xl min-h-40 border-none my-2"
-      />
+      {query?.mode === "ra" ? (
+        <div
+          className="font-mono text-2xl text-left w-full bg-white text-gray-900 max-w-4xl min-h-40 my-2 p-3 rounded border border-gray-300"
+          dangerouslySetInnerHTML={{ __html: renderRAPreview(query.code, true) }}
+        />
+      ) : (
+        <div className="w-full max-w-4xl my-2 rounded bg-slate-200 overflow-hidden">
+          <SqlEditor
+            value={format(
+              query ? query.code : view!.view.query, {
+                language: formatterLang,
+                tabWidth: 2,
+                useTabs: false,
+                keywordCase: "upper",
+                dataTypeCase: "upper",
+                functionCase: "upper",
+              })}
+            readOnly={true}
+            engine={engine}
+            isDarkMode={false}
+            className="font-mono text-xl bg-slate-200"
+          />
+        </div>
+      )}
       {query &&
                 <p className="break-words max-w-4xl mb-4 font-semibold text-left text-xl p-2 italic">{t("exportResultLabel")}</p>
       }

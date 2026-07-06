@@ -45,3 +45,23 @@ body {
 .dark .diff-added-line {
   background-color: rgba(34, 197, 94, 0.15);
 }
+
+/* RA Preview styling — light mode */
+.ra-prev-op { color: #a78bfa; font-weight: bold; }
+.ra-prev-assign { color: #a78bfa; font-weight: bold; }
+.ra-prev-logic { color: #1d4ed8; font-weight: bold; }
+.ra-prev-str { color: #047857; }
+.ra-prev-num { color: #b45309; }
+.ra-prev-comment { color: #6b7280; font-style: italic; }
+.ra-prev-sub { font-size: 0.9em; color: #4c1d95; }
+.ra-prev-paren { color: #9ca3af; }
+
+/* RA Preview styling — dark mode */
+.dark .ra-prev-op { color: #a78bfa; }
+.dark .ra-prev-assign { color: #a78bfa; }
+.dark .ra-prev-logic { color: #60a5fa; }
+.dark .ra-prev-str { color: #34d399; }
+.dark .ra-prev-num { color: #fbbf24; }
+.dark .ra-prev-comment { color: #9ca3af; }
+.dark .ra-prev-sub { color: #c4b5fd; }
+.dark .ra-prev-paren { color: #6b7280; }
