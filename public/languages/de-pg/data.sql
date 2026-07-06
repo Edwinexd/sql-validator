@@ -28,6 +28,10 @@ INSERT INTO Person VALUES ('131017-0050', 'Jean Richter', 'Abendrain 4', '4051',
 INSERT INTO Person VALUES ('131017-0051', 'Pascal Baumann', 'Birkenweg 12', '4051', 'Basel', '+41 78 901 23 45');
 INSERT INTO Person VALUES ('131017-0052', 'Thomas Dubois', 'Birkenweg 1', '4051', 'Basel', '+41 79 012 34 56');
 INSERT INTO Person VALUES ('131017-0053', 'Marco Schmid', 'Dorfstrasse 63', '6001', 'Luzern', '+41 78 250 28 55');
+INSERT INTO Person VALUES ('131017-0054', 'Monika Huber', 'Schulstrasse 14', '8002', 'Basel', '+41 76 111 22 33');
+INSERT INTO Person VALUES ('131017-0055', 'Andrea Haller', 'Eichtalstrasse 7', '6002', 'Zürich', '+41 77 222 33 44');
+INSERT INTO Person VALUES ('131017-0056', 'Isabelle Conti', 'Auenweg 22', '9001', 'Winterthur', '+41 78 333 44 55');
+INSERT INTO Person VALUES ('131017-0057', 'Daniel Brunner', 'Burgstrasse 3', '4052', 'Lugano', '+41 79 444 55 66');
 INSERT INTO Seminarraum VALUES (1, 'Jupiter', 12);
 INSERT INTO Seminarraum VALUES (2, 'Orion', 24);
 INSERT INTO Seminarraum VALUES (3, 'Sirius', 16);

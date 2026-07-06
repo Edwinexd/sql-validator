@@ -28,6 +28,10 @@ INSERT INTO Person VALUES ('131017-0050', 'Carl Nilsson', 'Strogatan 4', '16966'
 INSERT INTO Person VALUES ('131017-0051', 'Eva Jung', 'Skolgatan 12', '16966', 'Solna', '449867');
 INSERT INTO Person VALUES ('131017-0052', 'Lars Holm', 'Skolgatan 1', '16966', 'Solna', '665844');
 INSERT INTO Person VALUES ('131017-0053', 'Bo Dahl', 'Nygatan 63', '18753', 'Täby', '770691');
+INSERT INTO Person VALUES ('131017-0054', 'Sigge Grahn', 'Ekvägen 14', '16955', 'Solna', '112233');
+INSERT INTO Person VALUES ('131017-0055', 'Kurt Frid', 'Bokvägen 7', '17012', 'Södertälje', '445566');
+INSERT INTO Person VALUES ('131017-0056', 'Lola Berglund', 'Storgatan 22', '18760', 'Bromma', '778899');
+INSERT INTO Person VALUES ('131017-0057', 'Siw Ahl', 'Ahlgatan 3', '19044', 'Sollentuna', '223344');
 INSERT INTO Rum VALUES (1, 'Jupiter', 12);
 INSERT INTO Rum VALUES (2, 'Orion', 24);
 INSERT INTO Rum VALUES (3, 'Sirius', 16);

@@ -97,6 +97,10 @@ const en: LanguageDefinition = {
     "EN-019",
     "EN-020",
     "EN-021",
+    "EN-022",
+    "EN-023",
+    "EN-024",
+    "EN-025",
   ],
   postalCodes: [
     "GU1 1AA",
@@ -120,6 +124,10 @@ const en: LanguageDefinition = {
     "BA4 1AS",
     "BA5 2AT",
     "CB4 3AU",
+    "YO5 4AV",
+    "CB6 5AW",
+    "OX5 6AX",
+    "BA6 7AY",
   ],
   phones: [
     "01234567890",
@@ -143,6 +151,10 @@ const en: LanguageDefinition = {
     "01234567908",
     "01234567909",
     "01234567910",
+    "01234567911",
+    "01234567912",
+    "01234567913",
+    "01234567914",
   ],
 
   // ── Data: Courses ────────────────────────────────────────────
