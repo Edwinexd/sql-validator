@@ -1,5 +1,5 @@
 /*
-Fully client/web side SQL validation for the database course at Stockholm University
+Fully client/web side SQL client, editor & validator for practicing SQL
 Copyright (C) 2024 Edwin Sundberg
 
 This program is free software: you can redistribute it and/or modify
