@@ -40,7 +40,7 @@
   "scripts": {
     "dev": "npm-run-all copy-sqljs start-vite",
     "start": "npm-run-all copy-sqljs start-vite",
-    "build": "npm-run-all copy-sqljs build-vite",
+    "build": "npm-run-all copy-sqljs generate-licenses build-vite",
     "preview": "vite preview",
     "copy-sqljs": "copyfiles -f node_modules/sql.js/dist/sql-wasm.wasm public/dist/sql.js/",
     "start-vite": "vite",
@@ -50,6 +50,7 @@
     "decrypt-oracle": "tsx scripts/decrypt-oracle.ts",
     "encrypt-oracle": "tsx scripts/encrypt-oracle.ts",
     "generate-erd": "tsx scripts/generate-erd.ts",
+    "generate-licenses": "tsx scripts/generate-licenses.ts",
     "generate-all": "tsx scripts/generate-language.ts --all --plain && tsx scripts/generate-erd.ts --all"
   },
   "eslintConfig": {
@@ -91,6 +92,7 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.15.0",
     "vite": "^7.1.10",
-    "vite-plugin-node-polyfills": "^0.24.0"
+    "vite-plugin-node-polyfills": "^0.24.0",
+    "vitest": "^4.1.0"
   }
 }
