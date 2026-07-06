@@ -431,6 +431,7 @@ const de: LanguageDefinition = {
     modeRA: "Relationale Algebra",
     generatedSQL: "Generiertes SQL",
     raParseError: "Fehler in relationaler Algebra: {{message}}",
+    engineLoadFailed: "Die PostgreSQL-Engine konnte nicht geladen werden. Wechsel zurück zu SQLite.",
     raPlaceholder: "-- Schreibe einen Ausdruck der relationalen Algebra\n-- Klicke auf 'RA-Referenz' für die Syntax",
     raReference: "Referenz relationale Algebra",
     raUnaryOps: "Unäre Operatoren",
@@ -461,6 +462,12 @@ const de: LanguageDefinition = {
     raNoteAssignment: "Die letzte Zuweisung wird automatisch zurückgegeben",
     raConditions: "Bedingungen",
     raNoteComparison: "Vergleichsoperatoren: = <> < > <= >=",
+    editorSettings: "Editor-Einstellungen",
+    settingAutocomplete: "Autovervollständigung",
+    settingLineNumbers: "Zeilennummern",
+    settingHighlightActiveLine: "Aktive Zeile hervorheben",
+    sqlReferencePostgresql: "PostgreSQL-Dokumentation",
+    engineMismatchWarning: "Warnung: Diese Speicherdatei wurde mit einer anderen Datenbank-Engine erstellt ({{fileEngine}}). Der Import kann zu Problemen führen.",
   },
 };
 

@@ -80,7 +80,7 @@ function SqlBlock({ code, changedLines, variant }: { code: string; changedLines?
 
 const ImportDialog = forwardRef<ImportDialogHandle, ImportDialogProps>(
   ({ importedData, onOverwrite, onMergeApply }, ref) => {
-    const { t, lang, questions } = useLanguage();
+    const { t, lang, engine, questions } = useLanguage();
     const [isOpen, setIsOpen] = useState(false);
     const [step, setStep] = useState<"choose" | "resolve">("choose");
     const [analysis, setAnalysis] = useState<MergeAnalysis | null>(null);
@@ -167,6 +167,11 @@ const ImportDialog = forwardRef<ImportDialogHandle, ImportDialogProps>(
                 {importedData && importedData.language !== lang && (
                   <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-1">
                     {t("languageMismatchWarning", { fileLang: importedData.language })}
+                  </p>
+                )}
+                {importedData && importedData.engine !== engine && (
+                  <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-1">
+                    {t("engineMismatchWarning", { fileEngine: importedData.engine })}
                   </p>
                 )}
                 <div className="flex gap-3 mt-2">
