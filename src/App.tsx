@@ -83,6 +83,29 @@ function setStoredList(lang: string, engine: string, key: string, value: number[
   localStorage.setItem(engineKey(lang, engine, key), JSON.stringify(value));
 }
 
+type ValidationKind = "valid" | "incomplete" | "syntax" | "other";
+
+/**
+ * Classify a validation error message so the editor can skip re-parsing when the
+ * outcome cannot have changed. Messages come from both engines:
+ *   - incomplete: user is mid-typing (SQLite "incomplete input", Postgres "syntax
+ *     error at end of input") - appending more text may still make it valid.
+ *   - syntax: a real mistake at a token before the end (SQLite `near "X": syntax
+ *     error`, Postgres `syntax error at or near "X"`) - the parser fails at that
+ *     token regardless of what is appended after it.
+ *   - other: semantic errors (missing table/column) that depend on name resolution.
+ */
+function classifyValidationError(msg: string): ValidationKind {
+  const m = msg.toLowerCase();
+  if (m.includes("incomplete input") || m.includes("at end of input")) {
+    return "incomplete";
+  }
+  if (m.includes("syntax error")) {
+    return "syntax";
+  }
+  return "other";
+}
+
 function App() {
   const { lang, t, questions, dbData, defaultQuery, engine, setEngine } = useLanguage();
   const { settings: editorSettings, setSettings: setEditorSettings } = useEditorSettings();
@@ -309,7 +332,7 @@ function App() {
     if (question) questionLangRef.current = lang;
   }, [question, lang]);
 
-  // Validate query on change
+  // Persist the query on change (kept immediate so nothing is lost on tab close)
   useEffect(() => {
     if (!database || !question || query === undefined) {
       return;
@@ -334,28 +357,64 @@ function App() {
       setStoredList(lang, engine, wqStorageKey, wq);
       setWrittenQuestions(wq);
     }
+  }, [database, query, question, lang, defaultQuery, editorMode, engine]);
 
-    // Stale check for async validation
+  // Validate query on change. Validation prepares/parses SQL (or runs EXPLAIN on
+  // Postgres), which is the main battery cost while typing, so skip the engine call
+  // whenever the result provably cannot have changed since the last validation.
+  const lastValidationRef = useRef<{ query: string; kind: ValidationKind } | null>(null);
+  useEffect(() => {
+    if (!database || !question || query === undefined) {
+      return;
+    }
+    if (questionLangRef.current !== lang) {
+      return;
+    }
+
+    const prev = lastValidationRef.current;
+    // Nothing changed (effect re-fired for an unrelated dependency): reuse last result.
+    if (prev && prev.query === query) {
+      return;
+    }
+    // A real syntax error fails at the first bad token. If the user only appends more
+    // whitespace-separated tokens after an already-validated syntax error, that earlier
+    // token still fails, so re-parsing is pointless. The whitespace check keeps appended
+    // characters from merging into the failing token and changing the outcome.
+    if (
+      prev &&
+      prev.kind === "syntax" &&
+      query.startsWith(prev.query) &&
+      (/\s$/.test(prev.query) || /^\s/.test(query.slice(prev.query.length)))
+    ) {
+      return;
+    }
+
     let stale = false;
     const validate = async () => {
       if (editorMode === "sql") {
         const errorMsg = await database.validateStatements(query);
         if (stale) return;
         if (errorMsg === "multiple_statements") {
+          lastValidationRef.current = { query, kind: "other" };
           setError(t("multipleStatements"));
         } else if (errorMsg) {
+          lastValidationRef.current = { query, kind: classifyValidationError(errorMsg) };
           setError(errorMsg);
         } else {
+          lastValidationRef.current = { query, kind: "valid" };
           setError(null);
         }
       } else {
-        // In RA mode, try to parse and validate against database
+        // RA mode: its error shapes don't map onto the append-skip invariant, so only the
+        // exact-repeat guard above applies; re-parse on every actual change.
         try {
           await raToSQL(query, database);
           if (stale) return;
+          lastValidationRef.current = { query, kind: "valid" };
           setError(null);
         } catch (e) {
           if (stale) return;
+          lastValidationRef.current = { query, kind: "other" };
           if (e instanceof RAError) {
             setError(t("raParseError", { message: e.message }));
           } else {
@@ -366,7 +425,7 @@ function App() {
     };
     validate();
     return () => { stale = true; };
-  }, [database, query, question, lang, defaultQuery, t, editorMode]);
+  }, [database, query, question, lang, t, editorMode]);
 
 
   const refreshViews = useCallback(async (upsert: boolean) => {
