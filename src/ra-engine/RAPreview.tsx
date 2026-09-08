@@ -1,10 +1,20 @@
 /*
 Relational Algebra engine for sql-validator
-Copyright (C) 2026 E.SU. IT AB (Org.no 559484-0505) and Edwin Sundberg <edwin@edthing.com>
+Copyright (C) 2026 Edwin Sundberg
 
-Licensed under the PolyForm Noncommercial License 1.0.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License in the LICENSE.md file in this repository.
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 */
 
 import { useMemo } from "react";
