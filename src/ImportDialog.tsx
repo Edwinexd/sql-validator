@@ -10,7 +10,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-// @ts-expect-error - No types available
 import { highlight, languages } from "prismjs/components/prism-core";
 import "prismjs/components/prism-sql";
 import { getQuestion } from "./QuestionSelector";
@@ -52,7 +51,7 @@ function highlightWithDiff(
   changedLines: Set<number>,
   diffClass: string
 ): string {
-  const highlighted = highlight(code, languages.sql) as string;
+  const highlighted = highlight(code, languages.sql, "sql");
   return highlighted
     .split("\n")
     .map((line, i) => {
@@ -67,7 +66,7 @@ function highlightWithDiff(
 function SqlBlock({ code, changedLines, variant }: { code: string; changedLines?: Set<number>; variant?: "removed" | "added" }) {
   const diffClass = variant === "removed" ? "diff-removed-line" : "diff-added-line";
   const html = useMemo(
-    () => changedLines ? highlightWithDiff(code, changedLines, diffClass) : highlight(code, languages.sql),
+    () => changedLines ? highlightWithDiff(code, changedLines, diffClass) : highlight(code, languages.sql, "sql"),
     [code, changedLines, diffClass]
   );
   return (

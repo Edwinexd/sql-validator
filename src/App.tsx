@@ -61,7 +61,7 @@ import { PgliteEngine } from "./database/pgliteEngine";
 import { useEditorSettings } from "./useEditorSettings";
 import EditorSettingsDialog from "./EditorSettingsDialog";
 import { migrateLegacySqliteStorage } from "./storageMigration";
-import { downloadExportPng, renderExportSvg } from "./exportImage";
+import { downloadExportPng, renderExportSvg, type ExportTruncation } from "./exportImage";
 
 /** Storage key namespaced by editor mode */
 function modeKey(base: string, mode: "sql" | "ra"): string {
@@ -818,6 +818,7 @@ function App() {
       viewResultLabel: t("exportViewResultLabel", { name: exportView?.name || "" }),
       matchesLabel: t("exportMatches"),
       doesNotMatchLabel: t("exportDoesNotMatch"),
+      truncatedLabel: (truncation: ExportTruncation) => t("exportTruncated", { ...truncation }),
       generatedByLabel: t("generatedBy", { timestamp: new Date().toISOString() }),
     };
     const rendered = isViewExport

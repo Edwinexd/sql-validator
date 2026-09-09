@@ -428,6 +428,7 @@ const de: LanguageDefinition = {
       "... und das ist das Ergebnis einer Abfrage mit  SELECT * FROM {{name}};",
     exportMatches: "Übereinstimmungen",
     exportDoesNotMatch: "stimmt nicht überein",
+    exportTruncated: "Es werden {{rows}} von {{totalRows}} Zeilen und {{columns}} von {{totalColumns}} Spalten angezeigt",
     generatedBy: "Erstellt mit SQL Validator am {{timestamp}}",
     newCount: "neu",
     identicalCount: "identisch",
