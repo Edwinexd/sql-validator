@@ -39,4 +39,13 @@ describe("migrateLegacySqliteStorage", () => {
 
     expect(localStorage.getItem("sv:sqlite:writtenQuestions")).toBe("[2]");
   });
+
+  it("ignores malformed legacy ids and records that migration has run", () => {
+    localStorage.setItem("writtenQuestions", "not json");
+
+    migrateLegacySqliteStorage();
+
+    expect(localStorage.getItem("sv:sqlite:writtenQuestions")).toBeNull();
+    expect(localStorage.getItem("i18n-engine-migrated")).toBe("1");
+  });
 });

@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
 import path from "path";
@@ -7,6 +7,13 @@ const emptyShim = path.resolve(__dirname, "src/shims/empty.ts");
 
 // https://vite.dev/config/
 export default defineConfig({
+  test: {
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["src/**/*.test.{ts,tsx}", "src/**/*.d.ts"],
+    },
+  },
   plugins: [
     react(),
     nodePolyfills({
