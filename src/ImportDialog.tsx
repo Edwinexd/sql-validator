@@ -106,7 +106,7 @@ const ImportDialog = forwardRef<ImportDialogHandle, ImportDialogProps>(
     const handleMerge = () => {
       if (!importedData || !analysis) return;
       if (analysis.conflicts.length === 0) {
-        const local = getLocalData(lang);
+        const local = getLocalData(lang, engine);
         const merged = buildMergedData(local, importedData, analysis, {});
         onMergeApply(merged);
         setIsOpen(false);
@@ -117,7 +117,7 @@ const ImportDialog = forwardRef<ImportDialogHandle, ImportDialogProps>(
 
     const handleApplyMerge = () => {
       if (!importedData || !analysis) return;
-      const local = getLocalData(lang);
+      const local = getLocalData(lang, engine);
       const merged = buildMergedData(local, importedData, analysis, resolutions);
       onMergeApply(merged);
       setIsOpen(false);

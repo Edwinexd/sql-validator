@@ -34,6 +34,32 @@ function normalize(s: string): string {
   return s.trim().replace(/;+$/, "").trim();
 }
 
+/** Read persisted question ids without letting stale or malformed storage crash the UI. */
+export function parseQuestionIdList(raw: string | null): number[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.every(id => Number.isInteger(id))
+      ? parsed as number[]
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseViews(raw: string | null): View[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.every(
+      view => typeof view === "object" && view !== null &&
+        typeof (view as View).name === "string" && typeof (view as View).query === "string"
+    ) ? parsed as View[] : [];
+  } catch {
+    return [];
+  }
+}
+
 export function parseImportFile(data: string): ParsedSaveData {
   // v3+: structured metadata block; v2 fallback: comment in header
   const structuredLangMatch = data.match(
@@ -89,12 +115,8 @@ export function parseImportFile(data: string): ParsedSaveData {
 
 export function getLocalData(lang: string = "sv", engine: string = "sqlite"): ParsedSaveData {
   const pfx = `${lang}:${engine}:`;
-  const writtenQuestionIds: number[] = JSON.parse(
-    localStorage.getItem(`${pfx}writtenQuestions`) || "[]"
-  );
-  const correctQuestionIds: number[] = JSON.parse(
-    localStorage.getItem(`${pfx}correctQuestions`) || "[]"
-  );
+  const writtenQuestionIds = parseQuestionIdList(localStorage.getItem(`${pfx}writtenQuestions`));
+  const correctQuestionIds = parseQuestionIdList(localStorage.getItem(`${pfx}correctQuestions`));
 
   const rawQueries: Record<string, string> = {};
   for (const id of writtenQuestionIds) {
@@ -108,7 +130,7 @@ export function getLocalData(lang: string = "sv", engine: string = "sqlite"): Pa
     if (q) correctQueries[String(id)] = q;
   }
 
-  const views: View[] = JSON.parse(localStorage.getItem(`${pfx}views`) || "[]");
+  const views = parseViews(localStorage.getItem(`${pfx}views`));
 
   return { rawQueries, correctQueries, writtenQuestionIds, correctQuestionIds, views, language: lang, engine };
 }

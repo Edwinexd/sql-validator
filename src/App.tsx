@@ -50,7 +50,7 @@ import { isCorrectResult, Result } from "./utils";
 import DatabaseLayoutDialog from "./DatabaseLayoutDialog";
 import ExportSelectorModal, { ExportSelectorModalHandle } from "./ExportSelectorModal";
 import ImportDialog, { ImportDialogHandle } from "./ImportDialog";
-import { ParsedSaveData, parseImportFile, getLocalData, detectConflicts } from "./mergeUtils";
+import { ParsedSaveData, parseImportFile, getLocalData, detectConflicts, parseQuestionIdList } from "./mergeUtils";
 import { useLanguage, langKey, getUrlParam, setUrlParam } from "./i18n/context";
 import LanguageSelector from "./LanguageSelector";
 import EngineSelector from "./EngineSelector";
@@ -61,6 +61,7 @@ import { SqliteEngine } from "./database/sqliteEngine";
 import { PgliteEngine } from "./database/pgliteEngine";
 import { useEditorSettings } from "./useEditorSettings";
 import EditorSettingsDialog from "./EditorSettingsDialog";
+import { migrateLegacySqliteStorage } from "./storageMigration";
 
 /** Storage key namespaced by editor mode */
 function modeKey(base: string, mode: "sql" | "ra"): string {
@@ -75,7 +76,7 @@ function engineKey(lang: string, engine: string, key: string): string {
 /** Get a JSON-parsed list from localStorage, with language+engine+mode namespacing */
 function getStoredList(lang: string, engine: string, key: string): number[] {
   const raw = localStorage.getItem(engineKey(lang, engine, key));
-  return raw ? JSON.parse(raw) : [];
+  return parseQuestionIdList(raw);
 }
 
 /** Set a JSON list in localStorage, with language+engine namespacing */
@@ -121,43 +122,16 @@ function App() {
   const [pendingImportData, setPendingImportData] = useState<ParsedSaveData | null>(null);
 
   // QuestionSelector needs writtenQuestions and correctQuestions to be able to display the correct state
-  const [writtenQuestions, setWrittenQuestions] = useState<number[]>(() =>
-    getStoredList(lang, engine, modeKey("writtenQuestions", editorMode))
-  );
+  const [writtenQuestions, setWrittenQuestions] = useState<number[]>(() => {
+    migrateLegacySqliteStorage();
+    return getStoredList(lang, engine, modeKey("writtenQuestions", editorMode));
+  });
   const [correctQuestions, setCorrectQuestions] = useState<number[]>(() =>
     getStoredList(lang, engine, modeKey("correctQuestions", editorMode))
   );
 
   /** sql-formatter language based on engine */
   const formatterLang = engine === "postgresql" ? "postgresql" : "sqlite";
-
-  // One-time migration: copy old unnamespaced keys to sv: prefix
-  useEffect(() => {
-    if (localStorage.getItem("i18n-migrated")) return;
-    const oldWritten = localStorage.getItem("writtenQuestions");
-    if (oldWritten && !localStorage.getItem(langKey("sv", "writtenQuestions"))) {
-      localStorage.setItem(langKey("sv", "writtenQuestions"), oldWritten);
-      const ids: number[] = JSON.parse(oldWritten);
-      for (const id of ids) {
-        const q = localStorage.getItem(`questionId-${id}`);
-        if (q) localStorage.setItem(langKey("sv", `questionId-${id}`), q);
-      }
-    }
-    const oldCorrect = localStorage.getItem("correctQuestions");
-    if (oldCorrect && !localStorage.getItem(langKey("sv", "correctQuestions"))) {
-      localStorage.setItem(langKey("sv", "correctQuestions"), oldCorrect);
-      const ids: number[] = JSON.parse(oldCorrect);
-      for (const id of ids) {
-        const q = localStorage.getItem(`correctQuestionId-${id}`);
-        if (q) localStorage.setItem(langKey("sv", `correctQuestionId-${id}`), q);
-      }
-    }
-    const oldViews = localStorage.getItem("views");
-    if (oldViews && !localStorage.getItem(langKey("sv", "views"))) {
-      localStorage.setItem(langKey("sv", "views"), oldViews);
-    }
-    localStorage.setItem("i18n-migrated", "1");
-  }, []);
 
   // Reload written/correct questions when language or mode changes
   useEffect(() => {
@@ -406,7 +380,7 @@ function App() {
         refreshViews(false);
       }
     }
-  }, [database, views.length, lang]);
+  }, [database, views.length, lang, engine]);
 
   const runQuery = useCallback(async () => {
     if (!database || query === undefined) {
@@ -759,7 +733,7 @@ function App() {
       }
       await refreshViews(true);
     }
-  }, [database, question, refreshViews, views, lang]);
+  }, [database, question, refreshViews, views, lang, engine]);
 
   const importData = useCallback(() => {
     const input = document.createElement("input");
@@ -789,7 +763,7 @@ function App() {
       reader.readAsText(file);
     };
     input.click();
-  }, [lang]);
+  }, [lang, engine]);
 
   // Overriding default behavior for ctrl+s to call exportData instead
   useEffect(() => {

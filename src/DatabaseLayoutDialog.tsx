@@ -6,7 +6,6 @@ import { useLanguage } from "./i18n/context";
 // Keep static imports as fallback for Swedish (backwards compat with existing SVGs)
 import dbLayoutDarkFallback from "./db_layout_dark.svg";
 import dbLayoutLightFallback from "./db_layout_light.svg";
-import dbLayoutLightPngFallback from "./db_layout_light_bg.png";
 
 const DatabaseLayoutDialog = ({ isDarkMode }: { isDarkMode: () => boolean }) => {
   const { lang, engine, t } = useLanguage();
@@ -16,20 +15,18 @@ const DatabaseLayoutDialog = ({ isDarkMode }: { isDarkMode: () => boolean }) => 
   const basePath = engine === "postgresql" ? `/languages/${lang}-pg` : `/languages/${lang}`;
   const darkSrc = `${basePath}/db_layout_dark.svg`;
   const lightSrc = `${basePath}/db_layout_light.svg`;
-  const lightPngSrc = `${basePath}/db_layout_light_bg.png`;
 
   // Use fallback for Swedish or if language-specific files don't exist
   const [useFallback, setUseFallback] = useState(false);
 
   const getDarkSrc = () => useFallback ? dbLayoutDarkFallback : darkSrc;
   const getLightSrc = () => useFallback ? dbLayoutLightFallback : lightSrc;
-  const getLightPngSrc = () => useFallback ? dbLayoutLightPngFallback : lightPngSrc;
 
   const openDialog = () => {
     const isSmallScreen = window.matchMedia("(max-width: 48rem)").matches;
 
     if (isSmallScreen) {
-      window.open(getLightPngSrc(), "_blank");
+      window.open(getLightSrc(), "_blank");
       return;
     }
     setOpen(true);

@@ -46,21 +46,19 @@ export class PgliteEngine implements DatabaseEngine {
   }
 
   async validateStatements(sql: string): Promise<string | null> {
-    // Count semicolons outside of string literals
-    const stripped = sql.replace(/'[^']*'/g, ""); // remove string literals
-    const statements = stripped.split(";").filter(s => s.trim().length > 0);
-    if (statements.length > 1) {
-      return "multiple_statements";
+    if (!sql.trim()) return null;
+
+    // Let PostgreSQL parse the statement boundary. A string-based semicolon
+    // counter misclassifies semicolons in comments, dollar-quoted strings, and
+    // other valid PostgreSQL syntax.
+    try {
+      await this.db.query(`EXPLAIN ${sql}`);
+      return null;
+    } catch (e) {
+      const message = (e as Error).message;
+      if (/multiple commands/i.test(message)) return "multiple_statements";
+      return message;
     }
-    // Use EXPLAIN to validate syntax without executing
-    if (statements.length === 1) {
-      try {
-        await this.db.query(`EXPLAIN ${sql}`);
-      } catch (e) {
-        return (e as Error).message;
-      }
-    }
-    return null;
   }
 
   async getColumnNames(sql: string): Promise<string[]> {
