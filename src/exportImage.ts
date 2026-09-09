@@ -1,7 +1,7 @@
 import type { Result } from "./utils";
 import { format as formatSql } from "sql-formatter";
 import Prism from "prismjs";
-import "prismjs/components/prism-sql";
+import "prismjs/components/prism-sql.js";
 
 export interface ExportImageLabels {
   questionLabel: string;
