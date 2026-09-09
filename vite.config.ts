@@ -12,6 +12,10 @@ export default defineConfig({
       provider: "v8",
       include: ["src/**/*.{ts,tsx}"],
       exclude: ["src/**/*.test.{ts,tsx}", "src/**/*.d.ts"],
+      thresholds: {
+        statements: 90,
+        lines: 90,
+      },
     },
   },
   plugins: [
