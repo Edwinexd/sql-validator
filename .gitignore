@@ -38,6 +38,7 @@ scripts/*
 !scripts/generate-language.ts
 !scripts/extract-oracle.ts
 !scripts/generate-erd.ts
+!scripts/export-browser-test.ts
 !scripts/generate-licenses.ts
 !scripts/check-line-endings.sh
 !scripts/hooks/

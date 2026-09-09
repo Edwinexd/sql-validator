@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { toPng } from "html-to-image";
+import { downloadExportPng } from "./exportImage";
 
 const appState = vi.hoisted(() => ({
   dbData: null as ArrayBuffer | null,
@@ -68,7 +68,10 @@ vi.mock("@electric-sql/pglite", () => ({
     close = vi.fn();
   },
 }));
-vi.mock("html-to-image", () => ({ toPng: vi.fn(async () => "data:image/png;base64,WA==") }));
+vi.mock("./exportImage", () => ({
+  renderExportSvg: vi.fn(() => ({ svg: "<svg/>", width: 1200, height: 400 })),
+  downloadExportPng: vi.fn(async () => undefined),
+}));
 vi.mock("./QuestionSelector", () => ({
   default: ({ onSelect }: { onSelect: (question: typeof selectedQuestion) => void }) => <button onClick={() => onSelect(selectedQuestion)}>select-question</button>,
   getQuestion: () => selectedQuestion,
@@ -156,7 +159,7 @@ beforeEach(() => {
   appState.getViews.mockResolvedValue([]);
   appState.getSchema.mockReset();
   appState.getSchema.mockResolvedValue({ Person: ["id"] });
-  vi.mocked(toPng).mockClear();
+  vi.mocked(downloadExportPng).mockClear();
   URL.createObjectURL = vi.fn(() => "blob:download");
   URL.revokeObjectURL = vi.fn();
   HTMLAnchorElement.prototype.click = vi.fn();
@@ -286,9 +289,9 @@ describe("App", () => {
 
     fireEvent.pointerDown(screen.getByRole("button", { name: "actionsMenu" }), { button: 0, ctrlKey: false });
     fireEvent.click(await screen.findByText("exportPng"));
-    await waitFor(() => expect(toPng).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(downloadExportPng).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole("button", { name: "export-saved_view" }));
-    await waitFor(() => expect(toPng).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(downloadExportPng).toHaveBeenCalledTimes(2));
   });
 });

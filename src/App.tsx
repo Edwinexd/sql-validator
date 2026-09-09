@@ -41,7 +41,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import sha256 from "crypto-js/sha256";
 import { format as formatFns } from "date-fns";
-import { toPng } from "html-to-image";
 import PrivacyNoticeToggle from "./PrivacyNoticeToggle";
 import LicenseDialog from "./LicenseDialog";
 import ThemeToggle from "./ThemeToggle";
@@ -62,6 +61,7 @@ import { PgliteEngine } from "./database/pgliteEngine";
 import { useEditorSettings } from "./useEditorSettings";
 import EditorSettingsDialog from "./EditorSettingsDialog";
 import { migrateLegacySqliteStorage } from "./storageMigration";
+import { downloadExportPng, renderExportSvg } from "./exportImage";
 
 /** Storage key namespaced by editor mode */
 function modeKey(base: string, mode: "sql" | "ra"): string {
@@ -102,12 +102,13 @@ function App() {
   const [views, setViews] = useState<View[]>([]);
   const [isCorrect, setIsCorrect] = useState<boolean>();
   const [matchedResult, setMatchedResult] = useState<Result>();
-  const { getTheme, setTheme, isDarkMode } = useTheme();
+  const { setTheme, isDarkMode } = useTheme();
   // Exporting functionality / flags
   const [exportView, setExportView] = useState<View>();
   const [exportQuestion, setExportQuestion] = useState<Question>();
   const [exportQuery, setExportQuery] = useState<string | undefined>();
-  const [exportingStatus, setExportingStatus] = useState<number>(0);
+  const [exportResult, setExportResult] = useState<{ result: Result; isCorrect: boolean } | null>(null);
+  const [exportViewResult, setExportViewResult] = useState<Result | null>(null);
   const [loadedQuestionCorrect, setLoadedQuestionCorrect] = useState<boolean>(false);
   const [editorMode, setEditorMode] = useState<"sql" | "ra">(() => {
     const param = getUrlParam("mode");
@@ -505,7 +506,7 @@ function App() {
       setStoredList(lang, engine, cqStorageKey, cq);
       setCorrectQuestions(cq);
     }
-  }, [result, question, query, evaluatedQuery, exportingStatus, lang, editorMode]);
+  }, [result, question, query, evaluatedQuery, lang, editorMode]);
 
   // Save query based on question
   const loadQuery = useCallback((_oldQuestion: Question | undefined, newQuestion: Question) => {
@@ -778,9 +779,9 @@ function App() {
   }, [exportData]);
 
 
-  // Png exports
+  // PNG exports use a primitive-only SVG so browser DOM/CodeMirror layout does not affect capture.
   const exportImageQuery = useCallback(() => {
-    if (question === undefined || !loadedQuestionCorrect || exportView) {
+    if (question === undefined || !loadedQuestionCorrect) {
       return;
     }
 
@@ -794,7 +795,7 @@ function App() {
   }, [exportView, loadedQuestionCorrect, question, lang, editorMode]);
 
   const exportImageView = useCallback((name: string) => {
-    if (!database || exportQuery) {
+    if (!database) {
       return;
     }
     const view = views.find(v => v.name === name);
@@ -805,82 +806,32 @@ function App() {
   }, [database, exportQuery, views]);
 
   useEffect(() => {
-    if (!exportRendererRef.current || exportingStatus >= 1) {
-      return;
-    }
-
-    setExportingStatus(1);
-
-    // Wait for CodeMirror to render before capturing
-    const capture = () => { requestAnimationFrame(() => {
-      if (!exportRendererRef.current) { setExportingStatus(0); return; }
-
-      const triggerDownload = (dataUrl: string, filename: string) => {
-        const byteString = atob(dataUrl.split(",")[1]);
-        const mimeType = dataUrl.split(",")[0].split(":")[1].split(";")[0];
-        const ab = new ArrayBuffer(byteString.length);
-        const ia = new Uint8Array(ab);
-        for (let i = 0; i < byteString.length; i++) {
-          ia[i] = byteString.charCodeAt(i);
-        }
-        const blob = new Blob([ab], { type: mimeType });
-        const blobUrl = URL.createObjectURL(blob);
-
-        const link = document.createElement("a");
-        link.download = filename;
-        link.href = blobUrl;
-        link.style.display = "none";
-        document.body.appendChild(link);
-        link.click();
-
-        setTimeout(() => {
-          document.body.removeChild(link);
-          URL.revokeObjectURL(blobUrl);
-        }, 100);
-      };
-
-      // View
-      if (exportView) {
-        toPng(exportRendererRef.current, {
-          canvasWidth: exportRendererRef.current.scrollWidth,
-          width: exportRendererRef.current.scrollWidth,
-          canvasHeight: exportRendererRef.current.scrollHeight,
-          height: exportRendererRef.current.scrollHeight,
-          pixelRatio: 1
-        }).then((dataUrl) => {
-          triggerDownload(dataUrl, `validator_${exportView.name}.png`);
-          setExportView(undefined);
-          setExportingStatus(0);
-        });
-        return;
-      }
-
-      // Question
-      if (!question || !exportQuery || !exportQuestion) {
-        return;
-      }
-
-      const exportRenderer = exportRendererRef.current;
-      toPng(exportRenderer, {
-        canvasWidth: exportRenderer.scrollWidth,
-        width: exportRenderer.scrollWidth,
-        canvasHeight: exportRenderer.scrollHeight,
-        height: exportRenderer.scrollHeight,
-        pixelRatio: 1
-      }).then((dataUrl) => {
-        triggerDownload(dataUrl, `validator_${editorMode === "ra" ? "ra_" : ""}${question.id}_${question.category.display_number}${question.display_sequence}.png`);
-        setExportQuestion(undefined);
-        setExportQuery(undefined);
-        setExportingStatus(0);
+    const isViewExport = Boolean(exportView && exportViewResult);
+    const isQuestionExport = Boolean(exportQuestion && exportQuery && exportResult);
+    if (!isViewExport && !isQuestionExport) return;
+    const labels = {
+      questionLabel: t("exportQuestionLabel"),
+      variantLabel: t("exportVariantLabel"),
+      codeLabel: t("exportCodeLabel", { id: exportQuestion ? `${exportQuestion.category.display_number}${exportQuestion.display_sequence}` : "" }),
+      resultLabel: t("exportResultLabel"),
+      viewCodeLabel: t("exportViewCodeLabel", { name: exportView?.name || "" }),
+      viewResultLabel: t("exportViewResultLabel", { name: exportView?.name || "" }),
+      matchesLabel: t("exportMatches"),
+      doesNotMatchLabel: t("exportDoesNotMatch"),
+      generatedByLabel: t("generatedBy", { timestamp: new Date().toISOString() }),
+    };
+    const rendered = isViewExport
+      ? renderExportSvg({ labels, view: { view: exportView!, result: exportViewResult! } })
+      : renderExportSvg({ labels, query: { question: exportQuestion!, code: exportQuery!, result: exportResult!.result, isCorrect: exportResult!.isCorrect, mode: editorMode } });
+    const filename = isViewExport
+      ? `validator_${exportView!.name}.png`
+      : `validator_${editorMode === "ra" ? "ra_" : ""}${exportQuestion!.id}_${exportQuestion!.category.display_number}${exportQuestion!.display_sequence}.png`;
+    downloadExportPng(rendered, filename)
+      .catch(error => {
+        console.error("Failed to export PNG:", error);
+        setError(t("exportPngFailed"));
       });
-
-    }); }; // end capture + rAF
-    capture();
-  }, [evaluatedQuery, exportQuery, exportRendererRef, getTheme, isDarkMode, exportingStatus, question, resetResult, setTheme, exportQuestion, exportView]);
-
-  // Export renderer needs sync evalSql — we compute it eagerly when export is triggered
-  const [exportResult, setExportResult] = useState<{ result: Result; isCorrect: boolean } | null>(null);
-  const [exportViewResult, setExportViewResult] = useState<Result | null>(null);
+  }, [editorMode, exportQuestion, exportQuery, exportResult, exportView, exportViewResult, t]);
 
   useEffect(() => {
     if (!exportQuestion || !exportQuery || !database) {

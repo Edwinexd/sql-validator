@@ -46,6 +46,7 @@
     "build": "npm-run-all copy-sqljs generate-licenses build-vite",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:export:browsers": "node --experimental-strip-types scripts/export-browser-test.ts",
     "preview": "vite preview",
     "copy-sqljs": "copyfiles -f node_modules/sql.js/dist/sql-wasm.wasm public/dist/sql.js/",
     "start-vite": "vite",
