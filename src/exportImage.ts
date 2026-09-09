@@ -1,7 +1,7 @@
 import type { Result } from "./utils";
 import { format as formatSql } from "sql-formatter";
 import Prism from "prismjs";
-import "prismjs/components/prism-sql.js";
+import "prismjs/components/prism-sql";
 
 export interface ExportImageLabels {
   questionLabel: string;
@@ -79,6 +79,21 @@ const tokenColor = (token: string): string => {
   return "#313131";
 };
 
+function tokenizeSqlLine(line: string): Array<{ value: string; type: string }> {
+  const grammar = Prism.languages.sql;
+  if (!grammar) throw new Error("Prism SQL grammar was not bundled");
+  const flatten = (value: unknown, type = "plain"): Array<{ value: string; type: string }> => {
+    if (typeof value === "string") return [{ value, type }];
+    if (Array.isArray(value)) return value.flatMap(part => flatten(part, type));
+    if (value && typeof value === "object" && "content" in value) {
+      const token = value as { type?: string; content: unknown };
+      return flatten(token.content, token.type ?? type);
+    }
+    return [{ value: String(value ?? ""), type }];
+  };
+  return flatten(Prism.tokenize(line, grammar));
+}
+
 function codeElements(code: string, x: number, y: number, width: number): { svg: string; height: number } {
   let formatted = code;
   try { formatted = formatSql(code, { language: "sql", tabWidth: 2, useTabs: false, keywordCase: "upper", dataTypeCase: "upper", functionCase: "upper" }); } catch { /* preserve input */ }
@@ -87,11 +102,8 @@ function codeElements(code: string, x: number, y: number, width: number): { svg:
   const boxHeight = Math.max(92, lines.length * lineHeight + 28);
   let svg = `<rect x="${x}" y="${y}" width="${width}" height="${boxHeight}" rx="2" fill="#e2e8f0"/>`;
   lines.forEach((line, index) => {
-    const tokens = Prism.tokenize(line, Prism.languages.sql);
-    const tspans = tokens.map(part => {
-      const value = typeof part === "string" ? part : String(part.content);
-      const type = typeof part === "string" ? "plain" : part.type;
-      return `<tspan fill="${tokenColor(type)}">${escapeXml(value)}</tspan>`;
+    const tspans = tokenizeSqlLine(line).map(part => {
+      return `<tspan fill="${tokenColor(part.type)}">${escapeXml(part.value)}</tspan>`;
     }).join("");
     svg += `<text xml:space="preserve" x="${x + 12}" y="${y + 31 + index * lineHeight}" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18px">${tspans}</text>`;
   });
